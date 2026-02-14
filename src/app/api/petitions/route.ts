@@ -37,8 +37,9 @@ export async function GET(request: Request) {
       ];
     }
 
-    // PUBLIC users can only see their own drafts + all submitted/beyond
-    if (!hasMinRole(user.role, "DELEGATE")) {
+    // Users can only see their own drafts + all submitted/beyond
+    // (STAFF+ can see everything)
+    if (!hasMinRole(user.role, "STAFF")) {
       where.OR = [
         { submitterId: user.id },
         { status: { not: "DRAFT" } },
@@ -71,12 +72,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!hasMinRole(user.role, "DELEGATE")) {
-      return NextResponse.json(
-        { error: "Only delegates and above can create petitions" },
-        { status: 403 }
-      );
-    }
+    // Any authenticated UMC member can submit a petition
 
     const body = await request.json();
     const { title, summary, rationale, actionType, targetBook, conferenceId } =

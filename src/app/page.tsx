@@ -107,11 +107,11 @@ export default function HomePage() {
       <div className="bg-gray-50 border-t">
         <div className="max-w-4xl mx-auto px-4 py-12 text-center">
           <h2 className="text-xl font-bold mb-2">
-            Are you a delegate or staff member?
+            Are you a UMC member?
           </h2>
           <p className="text-gray-600 mb-6">
-            Sign in to submit petitions, participate in committee work, and
-            manage the legislative process.
+            Any United Methodist can submit a petition. Sign in to get started,
+            or create an account to participate.
           </p>
           <div className="flex gap-4 justify-center">
             <Link
