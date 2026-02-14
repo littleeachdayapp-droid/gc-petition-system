@@ -7,7 +7,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 1** (DONE): Scaffolding, Prisma schema, seed data, folder structure
 - **Session 2** (DONE): Auth (NextAuth.js, role-based access, middleware)
 - **Session 3** (DONE): Document browser (Book of Discipline / Book of Resolutions)
-- **Session 4**: Petition CRUD and submission
+- **Session 4** (DONE): Petition CRUD and submission
 - **Session 5**: Admin pipeline and auto-routing
 - **Session 6**: Committee workspace
 - **Session 7**: Diffing engine (red-line view)
@@ -102,6 +102,16 @@ npx prisma studio        # Browse data in browser
 - Query params: `sectionId`, `search`, `number`, `topicGroup` (resolutions only)
 - Components: `section-tree.tsx`, `paragraph-viewer.tsx`, `resolution-viewer.tsx`
 
+## Petition CRUD (Session 4)
+- Pages: `/petitions` (list with filters), `/petitions/new` (create), `/petitions/[id]` (detail with tabs), `/petitions/[id]/edit`, `/petitions/[id]/targets`
+- API: `GET/POST /api/petitions`, `GET/PATCH/DELETE /api/petitions/[id]`, `POST /api/petitions/[id]/targets`, `POST /api/petitions/[id]/submit`
+- `GET /api/conferences` — list conferences (for petition forms)
+- Display number format: `P-{year}-{NNNN}` (assigned on submit)
+- Status flow: DRAFT → SUBMITTED (with ORIGINAL version snapshot)
+- Access: DELEGATE+ can create; only owner (or STAFF+) can edit/delete DRAFT; ADMIN+ can delete
+- Targets editor: two-panel browse/select paragraphs or resolutions, set changeType + proposedText
+- Components: `petition-status-badge.tsx` (11-status colored badge)
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -115,4 +125,12 @@ pnpm dev   # http://localhost:3000
 - `/api/books/:id` — Book detail with section tree
 - `/api/books/:id/paragraphs` — Paragraphs (filterable)
 - `/api/books/:id/resolutions` — Resolutions (filterable)
+- `/petitions` — Petition list (filterable by status, search, my petitions)
+- `/petitions/new` — Create petition form
+- `/petitions/:id` — Petition detail (tabs: details, targets, history)
+- `/api/petitions` — List/create petitions
+- `/api/petitions/:id` — Get/update/delete petition
+- `/api/petitions/:id/targets` — Replace petition targets
+- `/api/petitions/:id/submit` — Submit petition (DRAFT → SUBMITTED)
+- `/api/conferences` — List conferences
 - `/api/health` — DB connection status + seed data counts
