@@ -11,7 +11,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 5** (DONE): Admin pipeline and auto-routing
 - **Session 6** (DONE): Committee workspace
 - **Session 7** (DONE): Diffing engine (red-line view)
-- **Session 8**: Plenary calendar and voting
+- **Session 8** (DONE): Plenary calendar and voting
 - **Session 9**: Public portal and search
 - **Session 10**: Polish, testing, deployment
 
@@ -139,6 +139,19 @@ npx prisma studio        # Browse data in browser
 - History tab enhanced: clickable "Red-line" button per version, version comparison dropdowns for multi-version diffs
 - ChangeType-aware: ADD_TEXT/ADD_PARAGRAPH show all-green, DELETE_TEXT/DELETE_PARAGRAPH show all-red, REPLACE_TEXT/RESTRUCTURE show word-level diff
 
+## Plenary Calendar & Voting (Session 8)
+- Pages: `/calendar` (session list grouped by date), `/calendar/[sessionId]` (session detail with items and voting)
+- API: `GET/POST /api/plenary-sessions` (list/create, filterable by conferenceId)
+- API: `GET/PATCH/DELETE /api/plenary-sessions/[sessionId]` (session CRUD)
+- API: `POST /api/plenary-sessions/[sessionId]/items` (add petition to calendar, updates status to ON_CALENDAR)
+- API: `PATCH/DELETE /api/plenary-sessions/[sessionId]/items/[itemId]` (update calendar type/order, remove from calendar)
+- API: `POST /api/plenary-sessions/[sessionId]/items/[itemId]/vote` (record plenary vote with action + vote counts)
+- Action→Status mapping: ADOPT→ADOPTED, DEFEAT→DEFEATED, AMEND→AMENDED (creates PLENARY_AMENDED version), REFER_BACK→IN_COMMITTEE, TABLE/POSTPONE→ON_CALENDAR
+- Calendar types: CONSENT, REGULAR, SPECIAL_ORDER — items grouped by type in UI
+- Access: STAFF+ can create sessions, add/remove items, record votes; all authenticated users can view
+- Session create form: session number, date, time block (MORNING/AFTERNOON/EVENING), notes
+- Add petition: only petitions with status APPROVED_BY_COMMITTEE, AMENDED, or REJECTED_BY_COMMITTEE
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -172,5 +185,12 @@ pnpm dev   # http://localhost:3000
 - `/api/committees/:id/assignments` — Committee assignments
 - `/api/committees/:id/actions` — Record committee action
 - `/api/committees/:id/amend` — Create committee amendment
+- `/calendar` — Plenary calendar (sessions grouped by date)
+- `/calendar/:sessionId` — Session detail (calendar items, voting)
+- `/api/plenary-sessions` — List/create plenary sessions
+- `/api/plenary-sessions/:sessionId` — Session CRUD
+- `/api/plenary-sessions/:sessionId/items` — Add petition to calendar
+- `/api/plenary-sessions/:sessionId/items/:itemId` — Update/remove calendar item
+- `/api/plenary-sessions/:sessionId/items/:itemId/vote` — Record plenary vote
 - `/api/conferences` — List conferences
 - `/api/health` — DB connection status + seed data counts
