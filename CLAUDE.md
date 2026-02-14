@@ -8,7 +8,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 2** (DONE): Auth (NextAuth.js, role-based access, middleware)
 - **Session 3** (DONE): Document browser (Book of Discipline / Book of Resolutions)
 - **Session 4** (DONE): Petition CRUD and submission
-- **Session 5**: Admin pipeline and auto-routing
+- **Session 5** (DONE): Admin pipeline and auto-routing
 - **Session 6**: Committee workspace
 - **Session 7**: Diffing engine (red-line view)
 - **Session 8**: Plenary calendar and voting
@@ -112,6 +112,15 @@ npx prisma studio        # Browse data in browser
 - Targets editor: two-panel browse/select paragraphs or resolutions, set changeType + proposedText
 - Components: `petition-status-badge.tsx` (11-status colored badge)
 
+## Admin Pipeline & Auto-Routing (Session 5)
+- Routing library: `src/lib/routing.ts` — `routeParagraph()`, `routeResolution()`, `routeByTags()`, `autoRoutePetition()`
+- Algorithm: match petition target paragraph/resolution numbers against committee `routingRulesJson` ranges, tag fallback, dedup, create PetitionAssignment records
+- Status flow: SUBMITTED → UNDER_REVIEW (on route/assign) → IN_COMMITTEE (when assignment moves to IN_PROGRESS)
+- API: `POST /api/petitions/[id]/route-petition` (auto-route, STAFF+), `POST /api/petitions/[id]/assign` (manual, STAFF+)
+- API: `GET /api/admin/pipeline` (filterable by status/search, STAFF+), `PATCH/DELETE /api/assignments/[id]`
+- API: `GET /api/committees` — list committees with counts
+- Admin page: `/admin` — pipeline view with status tabs, auto-route/manual-assign controls, assignment status management
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -132,5 +141,11 @@ pnpm dev   # http://localhost:3000
 - `/api/petitions/:id` — Get/update/delete petition
 - `/api/petitions/:id/targets` — Replace petition targets
 - `/api/petitions/:id/submit` — Submit petition (DRAFT → SUBMITTED)
+- `/admin` — Admin pipeline (route/assign/manage)
+- `/api/admin/pipeline` — Pipeline petitions (STAFF+)
+- `/api/petitions/:id/route-petition` — Auto-route petition
+- `/api/petitions/:id/assign` — Manual assign to committee
+- `/api/assignments/:id` — Update/delete assignment
+- `/api/committees` — List committees
 - `/api/conferences` — List conferences
 - `/api/health` — DB connection status + seed data counts
