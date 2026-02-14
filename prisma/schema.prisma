@@ -1,0 +1,424 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  COMMITTEE_CHAIR
+  COMMITTEE_MEMBER
+  DELEGATE
+  PUBLIC
+}
+
+enum PetitionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  IN_COMMITTEE
+  AMENDED
+  APPROVED_BY_COMMITTEE
+  REJECTED_BY_COMMITTEE
+  ON_CALENDAR
+  ADOPTED
+  DEFEATED
+  WITHDRAWN
+}
+
+enum ActionType {
+  AMEND
+  ADD
+  DELETE
+  REPLACE
+  RENAME
+  RESTRUCTURE
+  NEW_RESOLUTION
+}
+
+enum TargetBook {
+  DISCIPLINE
+  RESOLUTIONS
+  BOTH
+}
+
+enum ChangeType {
+  ADD_TEXT
+  DELETE_TEXT
+  REPLACE_TEXT
+  ADD_PARAGRAPH
+  DELETE_PARAGRAPH
+  RESTRUCTURE
+}
+
+enum VersionStage {
+  ORIGINAL
+  COMMITTEE_AMENDED
+  PLENARY_AMENDED
+  CONSENT_CALENDAR
+  FINAL
+}
+
+enum CommitteeRole {
+  CHAIR
+  VICE_CHAIR
+  SECRETARY
+  MEMBER
+}
+
+enum AssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DEFERRED
+}
+
+enum CommitteeActionType {
+  APPROVE
+  REJECT
+  AMEND_AND_APPROVE
+  DEFER
+  REFER
+  NO_ACTION
+}
+
+enum PlenaryTimeBlock {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum CalendarType {
+  CONSENT
+  REGULAR
+  SPECIAL_ORDER
+}
+
+enum PlenaryActionType {
+  ADOPT
+  DEFEAT
+  AMEND
+  REFER_BACK
+  TABLE
+  POSTPONE
+}
+
+// ============================================================
+// BASE DOCUMENTS (Section 7.1)
+// ============================================================
+
+model Book {
+  id          String   @id @default(cuid())
+  title       String
+  editionYear Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sections    Section[]
+  paragraphs  Paragraph[]
+  resolutions Resolution[]
+
+  @@unique([title, editionYear])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  bookId    String
+  parentId  String?
+  title     String
+  level     Int      // 0 = Part, 1 = Chapter, 2 = Sub-chapter, 3 = Division
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  parent   Section?  @relation("SectionHierarchy", fields: [parentId], references: [id])
+  children Section[] @relation("SectionHierarchy")
+
+  paragraphs  Paragraph[]
+  resolutions Resolution[]
+
+  @@index([bookId])
+  @@index([parentId])
+}
+
+model Paragraph {
+  id           String   @id @default(cuid())
+  bookId       String
+  sectionId    String
+  number       Int      // ¶ number (e.g. 101, 2702)
+  title        String?
+  currentText  String   @db.Text
+  categoryTags String[] // For committee routing
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book    Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  petitionTargets PetitionTarget[]
+
+  @@unique([bookId, number])
+  @@index([sectionId])
+  @@index([number])
+}
+
+model Resolution {
+  id                  String   @id @default(cuid())
+  bookId              String
+  sectionId           String
+  resolutionNumber    Int      // e.g. 1101, 3301
+  title               String
+  currentText         String   @db.Text
+  socialPrinciplePara String?  // Which social principle it relates to (e.g. "¶160")
+  topicGroup          String?  // Grouping tag
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  book    Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  petitionTargets PetitionTarget[]
+
+  @@unique([bookId, resolutionNumber])
+  @@index([sectionId])
+  @@index([resolutionNumber])
+}
+
+// ============================================================
+// PETITIONS (Section 7.2)
+// ============================================================
+
+model Petition {
+  id            String         @id @default(cuid())
+  displayNumber String?        @unique // e.g. "P-2028-0001"
+  title         String
+  summary       String?        @db.Text
+  rationale     String?        @db.Text
+  status        PetitionStatus @default(DRAFT)
+  actionType    ActionType
+  targetBook    TargetBook
+  submitterId   String
+  conferenceId  String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  submitter  User       @relation(fields: [submitterId], references: [id])
+  conference Conference @relation(fields: [conferenceId], references: [id])
+
+  targets     PetitionTarget[]
+  versions    PetitionVersion[]
+  assignments PetitionAssignment[]
+  calendarItems CalendarItem[]
+
+  @@index([status])
+  @@index([submitterId])
+  @@index([conferenceId])
+}
+
+model PetitionTarget {
+  id           String     @id @default(cuid())
+  petitionId   String
+  paragraphId  String?
+  resolutionId String?
+  changeType   ChangeType
+  proposedText String?    @db.Text
+  createdAt    DateTime   @default(now())
+
+  petition   Petition    @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  paragraph  Paragraph?  @relation(fields: [paragraphId], references: [id])
+  resolution Resolution? @relation(fields: [resolutionId], references: [id])
+
+  @@index([petitionId])
+}
+
+model PetitionVersion {
+  id           String       @id @default(cuid())
+  petitionId   String
+  versionNum   Int
+  stage        VersionStage
+  snapshotJson Json         // Full snapshot of petition state
+  deltaJson    Json?        // Changes from previous version
+  createdById  String
+  createdAt    DateTime     @default(now())
+
+  petition  Petition @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@unique([petitionId, versionNum])
+  @@index([petitionId])
+}
+
+// ============================================================
+// COMMITTEES (Section 7.3)
+// ============================================================
+
+model Committee {
+  id               String   @id @default(cuid())
+  name             String
+  abbreviation     String   @unique
+  description      String?  @db.Text
+  routingRulesJson Json     // Paragraph/resolution ranges for auto-routing
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  memberships CommitteeMembership[]
+  assignments PetitionAssignment[]
+  actions     CommitteeAction[]
+}
+
+model CommitteeMembership {
+  id          String        @id @default(cuid())
+  userId      String
+  committeeId String
+  role        CommitteeRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, committeeId])
+}
+
+model PetitionAssignment {
+  id          String           @id @default(cuid())
+  petitionId  String
+  committeeId String
+  status      AssignmentStatus @default(PENDING)
+  assignedAt  DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  petition  Petition  @relation(fields: [petitionId], references: [id], onDelete: Cascade)
+  committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  actions CommitteeAction[]
+
+  @@unique([petitionId, committeeId])
+}
+
+model CommitteeAction {
+  id           String              @id @default(cuid())
+  assignmentId String
+  committeeId  String
+  action       CommitteeActionType
+  votesFor     Int                 @default(0)
+  votesAgainst Int                 @default(0)
+  votesAbstain Int                 @default(0)
+  notes        String?             @db.Text
+  createdAt    DateTime            @default(now())
+
+  assignment PetitionAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  committee  Committee          @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+}
+
+// ============================================================
+// PLENARY (Section 7.4)
+// ============================================================
+
+model PlenarySession {
+  id            String           @id @default(cuid())
+  conferenceId  String
+  sessionNumber Int
+  date          DateTime         @db.Date
+  timeBlock     PlenaryTimeBlock
+  notes         String?          @db.Text
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  conference Conference     @relation(fields: [conferenceId], references: [id])
+  items      CalendarItem[]
+
+  @@unique([conferenceId, sessionNumber])
+}
+
+model CalendarItem {
+  id              String       @id @default(cuid())
+  plenarySessionId String
+  petitionId      String
+  calendarType    CalendarType
+  orderNumber     Int
+  createdAt       DateTime     @default(now())
+
+  plenarySession PlenarySession @relation(fields: [plenarySessionId], references: [id], onDelete: Cascade)
+  petition       Petition       @relation(fields: [petitionId], references: [id])
+
+  actions PlenaryAction[]
+
+  @@unique([plenarySessionId, orderNumber])
+  @@index([petitionId])
+}
+
+model PlenaryAction {
+  id             String            @id @default(cuid())
+  calendarItemId String
+  action         PlenaryActionType
+  votesFor       Int               @default(0)
+  votesAgainst   Int               @default(0)
+  votesAbstain   Int               @default(0)
+  notes          String?           @db.Text
+  createdAt      DateTime          @default(now())
+
+  calendarItem CalendarItem @relation(fields: [calendarItemId], references: [id], onDelete: Cascade)
+
+  @@index([calendarItemId])
+}
+
+// ============================================================
+// USERS & CONFIG (Section 7.5)
+// ============================================================
+
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  name                 String
+  passwordHash         String
+  role                 UserRole @default(PUBLIC)
+  delegationConference String?  // e.g. "North Texas Conference"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  petitions           Petition[]
+  petitionVersions    PetitionVersion[]
+  committeeMemberships CommitteeMembership[]
+}
+
+model Conference {
+  id        String   @id @default(cuid())
+  name      String
+  year      Int
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  petitions        Petition[]
+  plenarySessions  PlenarySession[]
+  submissionWindows SubmissionWindow[]
+
+  @@unique([year])
+}
+
+model SubmissionWindow {
+  id           String   @id @default(cuid())
+  conferenceId String
+  name         String   @default("General Submission")
+  opensAt      DateTime
+  closesAt     DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  conference Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@index([conferenceId])
+}
