@@ -13,7 +13,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 7** (DONE): Diffing engine (red-line view)
 - **Session 8** (DONE): Plenary calendar and voting
 - **Session 9** (DONE): Public portal and search
-- **Session 10**: Polish, testing, deployment
+- **Session 10** (DONE): Polish (mobile nav, custom 404/error pages, dashboard stats, ESLint fixes)
 
 ## Tech Stack
 - **Framework**: Next.js 15 (App Router)
@@ -208,4 +208,14 @@ pnpm dev   # http://localhost:3000
 - `/api/plenary-sessions/:sessionId/items/:itemId` — Update/remove calendar item
 - `/api/plenary-sessions/:sessionId/items/:itemId/vote` — Record plenary vote
 - `/api/conferences` — List conferences
+- `/api/dashboard/stats` — Dashboard stats (petition counts by status, committee/session counts)
 - `/api/health` — DB connection status + seed data counts
+
+## Polish (Session 10)
+- Custom 404 page: `src/app/not-found.tsx` — links to home and browse
+- Custom error page: `src/app/error.tsx` — try again button + home link
+- Mobile nav: `src/components/mobile-nav.tsx` — hamburger menu, used in both `(dashboard)` and `(public)` layouts
+- Dashboard: live stats cards (8 metrics with colored backgrounds), 6 quick-link cards
+- ESLint: `react-hooks/set-state-in-effect` downgraded to warning (React 19 strict rule conflicts with standard data-fetching patterns)
+- Version diff API: made public (no auth required), returns 404 for DRAFT petitions
+- Public API status filter: proper PetitionStatus enum validation

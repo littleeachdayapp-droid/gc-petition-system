@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, PetitionStatus } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,8 +18,13 @@ export async function GET(request: NextRequest) {
     };
 
     if (status) {
-      const statuses = status.split(",");
-      where.status = { in: statuses as Prisma.PetitionWhereInput["status"] extends { in?: infer T } ? T : never };
+      const validStatuses = Object.values(PetitionStatus);
+      const statuses = status
+        .split(",")
+        .filter((s) => validStatuses.includes(s as PetitionStatus)) as PetitionStatus[];
+      if (statuses.length > 0) {
+        where.status = { in: statuses };
+      }
     }
 
     if (search) {

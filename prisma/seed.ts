@@ -841,7 +841,7 @@ async function main() {
   // ============================================================
   const passwordHash = hashSync("password123", 10);
 
-  const superAdmin = await prisma.user.create({
+  const _superAdmin = await prisma.user.create({
     data: {
       email: "superadmin@gc2028.org",
       name: "Super Admin",
@@ -850,7 +850,7 @@ async function main() {
     },
   });
 
-  const admin = await prisma.user.create({
+  const _admin = await prisma.user.create({
     data: {
       email: "admin@gc2028.org",
       name: "Conference Admin",
@@ -859,7 +859,7 @@ async function main() {
     },
   });
 
-  const staff = await prisma.user.create({
+  const _staff = await prisma.user.create({
     data: {
       email: "staff@gc2028.org",
       name: "Staff Member",
@@ -892,7 +892,7 @@ async function main() {
     },
   });
 
-  const delegate = await prisma.user.create({
+  const _delegate = await prisma.user.create({
     data: {
       email: "delegate@gc2028.org",
       name: "Delegate Smith",
@@ -902,7 +902,7 @@ async function main() {
     },
   });
 
-  const publicUser = await prisma.user.create({
+  const _publicUser = await prisma.user.create({
     data: {
       email: "public@gc2028.org",
       name: "Public Observer",

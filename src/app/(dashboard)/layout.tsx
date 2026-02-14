@@ -1,5 +1,15 @@
 import Link from "next/link";
 import { UserNav } from "@/components/user-nav";
+import { MobileNav } from "@/components/mobile-nav";
+
+const DASHBOARD_LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/documents", label: "Documents" },
+  { href: "/petitions", label: "Petitions" },
+  { href: "/committees", label: "Committees" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/admin", label: "Admin" },
+];
 
 export default function DashboardLayout({
   children,
@@ -8,7 +18,7 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="min-h-screen">
-      <nav className="border-b bg-white">
+      <nav className="border-b bg-white relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-8">
@@ -16,45 +26,21 @@ export default function DashboardLayout({
                 GC Petitions
               </Link>
               <div className="hidden md:flex gap-6">
-                <Link
-                  href="/dashboard"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/documents"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Documents
-                </Link>
-                <Link
-                  href="/petitions"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Petitions
-                </Link>
-                <Link
-                  href="/committees"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Committees
-                </Link>
-                <Link
-                  href="/calendar"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Calendar
-                </Link>
-                <Link
-                  href="/admin"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Admin
-                </Link>
+                {DASHBOARD_LINKS.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </div>
             </div>
-            <UserNav />
+            <div className="flex items-center gap-2">
+              <UserNav />
+              <MobileNav links={DASHBOARD_LINKS} />
+            </div>
           </div>
         </div>
       </nav>

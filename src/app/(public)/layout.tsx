@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { UserNav } from "@/components/user-nav";
+import { MobileNav } from "@/components/mobile-nav";
+
+const PUBLIC_LINKS = [
+  { href: "/browse", label: "Browse Petitions" },
+  { href: "/results", label: "Results" },
+];
 
 export default function PublicLayout({
   children,
@@ -7,8 +13,8 @@ export default function PublicLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <nav className="border-b bg-white">
+    <div className="min-h-screen flex flex-col">
+      <nav className="border-b bg-white relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center gap-8">
@@ -16,21 +22,21 @@ export default function PublicLayout({
                 GC Petitions
               </Link>
               <div className="hidden md:flex gap-6">
-                <Link
-                  href="/browse"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Browse Petitions
-                </Link>
-                <Link
-                  href="/results"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Results
-                </Link>
+                {PUBLIC_LINKS.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
               </div>
             </div>
-            <UserNav />
+            <div className="flex items-center gap-2">
+              <UserNav />
+              <MobileNav links={PUBLIC_LINKS} />
+            </div>
           </div>
         </div>
       </nav>

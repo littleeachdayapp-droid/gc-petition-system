@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth-helpers";
 import { buildVersionDiffs, compareVersionTargets } from "@/lib/diff";
 
 interface SnapshotTarget {
@@ -23,12 +22,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string; versionId: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id: petitionId, versionId } = await params;
+
+    // Verify petition is not a draft (public access allowed for non-drafts)
+    const petition = await prisma.petition.findUnique({
+      where: { id: petitionId },
+      select: { status: true },
+    });
+
+    if (!petition || petition.status === "DRAFT") {
+      return NextResponse.json(
+        { error: "Not found" },
+        { status: 404 }
+      );
+    }
 
     const version = await prisma.petitionVersion.findUnique({
       where: { id: versionId },
