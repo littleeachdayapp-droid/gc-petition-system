@@ -160,11 +160,19 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Admin Pipeline</h1>
-        <p className="text-gray-600 mt-1">
-          Route petitions to committees and manage assignments
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Admin Pipeline</h1>
+          <p className="text-gray-600 mt-1">
+            Route petitions to committees and manage assignments
+          </p>
+        </div>
+        <Link
+          href="/admin/users"
+          className="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-800"
+        >
+          Manage Users
+        </Link>
       </div>
 
       {/* Tabs */}
