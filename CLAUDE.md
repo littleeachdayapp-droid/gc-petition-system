@@ -12,7 +12,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 6** (DONE): Committee workspace
 - **Session 7** (DONE): Diffing engine (red-line view)
 - **Session 8** (DONE): Plenary calendar and voting
-- **Session 9**: Public portal and search
+- **Session 9** (DONE): Public portal and search
 - **Session 10**: Polish, testing, deployment
 
 ## Tech Stack
@@ -152,6 +152,15 @@ npx prisma studio        # Browse data in browser
 - Session create form: session number, date, time block (MORNING/AFTERNOON/EVENING), notes
 - Add petition: only petitions with status APPROVED_BY_COMMITTEE, AMENDED, or REJECTED_BY_COMMITTEE
 
+## Public Portal & Search (Session 9)
+- Route group: `(public)` — layout with nav (Browse/Results/Sign In) + footer, no auth required
+- Pages: `/` (landing with hero, process steps, CTA), `/browse` (search + filter + paginate), `/browse/[id]` (full detail with status timeline, targets, votes, red-line history), `/results` (outcomes dashboard with summary cards)
+- Public APIs (no auth): `GET /api/public/petitions` (search, status filter, sort, pagination), `GET /api/public/petitions/[id]` (full detail with assignments/calendar/votes, 404 for DRAFT), `GET /api/public/results` (adopted/defeated with vote data + summary counts)
+- Public petition list: search by title/number/summary, status filter dropdown, sort by newest/oldest/title/number, 20/page pagination
+- Public petition detail: status timeline bar, 4 tabs (details, targets, votes, history), committee assignments with action badges, plenary vote results, red-line diff viewer
+- Results page: summary cards (total/adopted/defeated), outcome filter tabs, final vote counts inline
+- Landing page: hero with gradient, 4-step process explainer, delegate/staff CTA section
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -185,6 +194,12 @@ pnpm dev   # http://localhost:3000
 - `/api/committees/:id/assignments` — Committee assignments
 - `/api/committees/:id/actions` — Record committee action
 - `/api/committees/:id/amend` — Create committee amendment
+- `/browse` — Public petition search (no auth)
+- `/browse/:id` — Public petition detail (no auth, 404 for DRAFT)
+- `/results` — Voting outcomes dashboard (no auth)
+- `/api/public/petitions` — Public petition list (search, filter, paginate)
+- `/api/public/petitions/:id` — Public petition detail with votes
+- `/api/public/results` — Adopted/defeated with summary counts
 - `/calendar` — Plenary calendar (sessions grouped by date)
 - `/calendar/:sessionId` — Session detail (calendar items, voting)
 - `/api/plenary-sessions` — List/create plenary sessions
