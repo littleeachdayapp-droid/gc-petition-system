@@ -6,7 +6,7 @@ UMC General Conference Petition Management System. Handles the full lifecycle of
 Full implementation plan is in the project plan document. Work is organized into sessions:
 - **Session 1** (DONE): Scaffolding, Prisma schema, seed data, folder structure
 - **Session 2** (DONE): Auth (NextAuth.js, role-based access, middleware)
-- **Session 3**: Document browser (Book of Discipline / Book of Resolutions)
+- **Session 3** (DONE): Document browser (Book of Discipline / Book of Resolutions)
 - **Session 4**: Petition CRUD and submission
 - **Session 5**: Admin pipeline and auto-routing
 - **Session 6**: Committee workspace
@@ -84,13 +84,23 @@ npx prisma studio        # Browse data in browser
 - Config: `src/lib/auth.ts` (shared `authOptions`)
 - Type augmentation: `src/types/next-auth.d.ts` (adds `id` and `role` to session/JWT)
 - API: `src/app/api/auth/[...nextauth]/route.ts`, `src/app/api/auth/register/route.ts`
-- Middleware: `src/middleware.ts` — protects `/dashboard/*`, `/petitions/*`, `/committees/*`, `/calendar/*`, `/admin/*`; redirects unauthed to `/login`; redirects authed away from `/login` and `/register`
+- Middleware: `src/middleware.ts` — protects `/dashboard/*`, `/documents/*`, `/petitions/*`, `/committees/*`, `/calendar/*`, `/admin/*`; redirects unauthed to `/login`; redirects authed away from `/login` and `/register`
 - Auth helpers: `src/lib/auth-helpers.ts` — `getCurrentUser()`, `requireRole()`, `requireMinRole()`, `hasMinRole()`, `hasRole()`
 - Role hierarchy (lowest→highest): PUBLIC → DELEGATE → COMMITTEE_MEMBER → COMMITTEE_CHAIR → STAFF → ADMIN → SUPER_ADMIN
 - Client: `<SessionProvider>` in `src/components/providers.tsx`, wraps root layout
 - `<UserNav>` component shows name, role label, sign out button
 - Registration creates users with role `PUBLIC`
 - Env vars: `NEXTAUTH_SECRET`, `NEXTAUTH_URL`
+
+## Document Browser (Session 3)
+- Page: `/documents` — two-panel layout with section tree sidebar + content area
+- Book tabs switch between Discipline (paragraphs) and Resolutions
+- Collapsible hierarchical section tree navigation
+- Search by title or text content
+- Detail view for individual paragraphs (¶ number, tags) and resolutions (R number, topic group, social principle ref)
+- API: `GET /api/books`, `GET /api/books/[id]` (with section tree), `GET /api/books/[id]/paragraphs`, `GET /api/books/[id]/resolutions`
+- Query params: `sectionId`, `search`, `number`, `topicGroup` (resolutions only)
+- Components: `section-tree.tsx`, `paragraph-viewer.tsx`, `resolution-viewer.tsx`
 
 ## Dev Server
 ```bash
@@ -100,4 +110,9 @@ pnpm dev   # http://localhost:3000
 ### Key Endpoints
 - `/` — Landing page
 - `/dashboard` — Dashboard with nav links
+- `/documents` — Document browser (Discipline + Resolutions)
+- `/api/books` — List books
+- `/api/books/:id` — Book detail with section tree
+- `/api/books/:id/paragraphs` — Paragraphs (filterable)
+- `/api/books/:id/resolutions` — Resolutions (filterable)
 - `/api/health` — DB connection status + seed data counts

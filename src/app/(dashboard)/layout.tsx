@@ -23,6 +23,12 @@ export default function DashboardLayout({
                   Dashboard
                 </Link>
                 <Link
+                  href="/documents"
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  Documents
+                </Link>
+                <Link
                   href="/petitions"
                   className="text-gray-600 hover:text-gray-900"
                 >
