@@ -9,7 +9,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 3** (DONE): Document browser (Book of Discipline / Book of Resolutions)
 - **Session 4** (DONE): Petition CRUD and submission
 - **Session 5** (DONE): Admin pipeline and auto-routing
-- **Session 6**: Committee workspace
+- **Session 6** (DONE): Committee workspace
 - **Session 7**: Diffing engine (red-line view)
 - **Session 8**: Plenary calendar and voting
 - **Session 9**: Public portal and search
@@ -121,6 +121,14 @@ npx prisma studio        # Browse data in browser
 - API: `GET /api/committees` — list committees with counts
 - Admin page: `/admin` — pipeline view with status tabs, auto-route/manual-assign controls, assignment status management
 
+## Committee Workspace (Session 6)
+- Pages: `/committees` (grid list), `/committees/[id]` (workspace with tabs: assignments, members, history)
+- API: `GET /api/committees/[id]` (detail + members), `GET /api/committees/[id]/assignments` (filterable by status)
+- API: `POST /api/committees/[id]/actions` (record vote — action type + vote counts + notes, updates petition status)
+- API: `POST /api/committees/[id]/amend` (create COMMITTEE_AMENDED version)
+- Action→Status mapping: APPROVE→APPROVED_BY_COMMITTEE, REJECT/NO_ACTION→REJECTED_BY_COMMITTEE, AMEND_AND_APPROVE→AMENDED, DEFER→IN_COMMITTEE, REFER→UNDER_REVIEW
+- Access: committee members can view; chair/vice-chair/STAFF+ can record actions; membership verified per-committee
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -141,11 +149,17 @@ pnpm dev   # http://localhost:3000
 - `/api/petitions/:id` — Get/update/delete petition
 - `/api/petitions/:id/targets` — Replace petition targets
 - `/api/petitions/:id/submit` — Submit petition (DRAFT → SUBMITTED)
+- `/committees` — Committee list
+- `/committees/:id` — Committee workspace (assignments, members, actions)
 - `/admin` — Admin pipeline (route/assign/manage)
 - `/api/admin/pipeline` — Pipeline petitions (STAFF+)
 - `/api/petitions/:id/route-petition` — Auto-route petition
 - `/api/petitions/:id/assign` — Manual assign to committee
 - `/api/assignments/:id` — Update/delete assignment
 - `/api/committees` — List committees
+- `/api/committees/:id` — Committee detail with members
+- `/api/committees/:id/assignments` — Committee assignments
+- `/api/committees/:id/actions` — Record committee action
+- `/api/committees/:id/amend` — Create committee amendment
 - `/api/conferences` — List conferences
 - `/api/health` — DB connection status + seed data counts
