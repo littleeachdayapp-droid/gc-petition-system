@@ -10,7 +10,7 @@ Full implementation plan is in the project plan document. Work is organized into
 - **Session 4** (DONE): Petition CRUD and submission
 - **Session 5** (DONE): Admin pipeline and auto-routing
 - **Session 6** (DONE): Committee workspace
-- **Session 7**: Diffing engine (red-line view)
+- **Session 7** (DONE): Diffing engine (red-line view)
 - **Session 8**: Plenary calendar and voting
 - **Session 9**: Public portal and search
 - **Session 10**: Polish, testing, deployment
@@ -129,6 +129,16 @@ npx prisma studio        # Browse data in browser
 - Action→Status mapping: APPROVE→APPROVED_BY_COMMITTEE, REJECT/NO_ACTION→REJECTED_BY_COMMITTEE, AMEND_AND_APPROVE→AMENDED, DEFER→IN_COMMITTEE, REFER→UNDER_REVIEW
 - Access: committee members can view; chair/vice-chair/STAFF+ can record actions; membership verified per-committee
 
+## Diffing Engine (Session 7)
+- Library: `diff` (word-level diffing via `diffWords`)
+- Diff utility: `src/lib/diff.ts` — `computeDiff()`, `buildVersionDiffs()`, `compareVersionTargets()`
+- Component: `src/components/diff-viewer.tsx` — `DiffViewer` (renders TargetDiff[] with red-line styling), `InlineDiff`
+- API: `GET /api/petitions/:id/versions/:versionId` — returns diff for a single version (currentText vs proposedText)
+- API: `GET /api/petitions/:id/versions/:versionId?compareWith=:otherId` — returns diff between two versions' proposed texts
+- Red-line styling: additions (green bg + underline), deletions (red bg + strikethrough)
+- History tab enhanced: clickable "Red-line" button per version, version comparison dropdowns for multi-version diffs
+- ChangeType-aware: ADD_TEXT/ADD_PARAGRAPH show all-green, DELETE_TEXT/DELETE_PARAGRAPH show all-red, REPLACE_TEXT/RESTRUCTURE show word-level diff
+
 ## Dev Server
 ```bash
 pnpm dev   # http://localhost:3000
@@ -149,6 +159,7 @@ pnpm dev   # http://localhost:3000
 - `/api/petitions/:id` — Get/update/delete petition
 - `/api/petitions/:id/targets` — Replace petition targets
 - `/api/petitions/:id/submit` — Submit petition (DRAFT → SUBMITTED)
+- `/api/petitions/:id/versions/:versionId` — Version diff (red-line view, optional `?compareWith=`)
 - `/committees` — Committee list
 - `/committees/:id` — Committee workspace (assignments, members, actions)
 - `/admin` — Admin pipeline (route/assign/manage)

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PetitionStatusBadge } from "@/components/petition-status-badge";
+import { DiffViewer, type TargetDiff } from "@/components/diff-viewer";
 import { PetitionStatus } from "@/generated/prisma/client";
 
 interface Target {
@@ -100,6 +101,12 @@ export default function PetitionDetailPage({
   const [activeTab, setActiveTab] = useState<"details" | "targets" | "history">(
     "details"
   );
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null
+  );
+  const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
+  const [diffs, setDiffs] = useState<TargetDiff[] | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
   const loadPetition = useCallback(() => {
     fetch(`/api/petitions/${id}`)
@@ -170,6 +177,30 @@ export default function PetitionDetailPage({
       const data = await res.json();
       setError(data.error || "Failed to delete petition");
       setDeleting(false);
+    }
+  }
+
+  async function loadDiff(versionId: string, compareWith?: string) {
+    setDiffLoading(true);
+    setDiffs(null);
+    setSelectedVersionId(versionId);
+    setCompareVersionId(compareWith || null);
+
+    let url = `/api/petitions/${id}/versions/${versionId}`;
+    if (compareWith) {
+      url += `?compareWith=${compareWith}`;
+    }
+
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setDiffs(data.diffs);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDiffLoading(false);
     }
   }
 
@@ -406,34 +437,138 @@ export default function PetitionDetailPage({
 
       {/* History tab */}
       {activeTab === "history" && (
-        <div>
+        <div className="space-y-6">
           {petition.versions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No version history yet. Versions are created when the petition
               is submitted and at each stage of review.
             </div>
           ) : (
-            <div className="space-y-2">
-              {petition.versions.map((v) => (
-                <div
-                  key={v.id}
-                  className="bg-white border rounded-lg p-4 flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-medium">
-                      Version {v.versionNum}
-                    </span>
-                    <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
-                      {STAGE_LABELS[v.stage] || v.stage}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {v.createdBy.name} &middot;{" "}
-                    {new Date(v.createdAt).toLocaleString()}
+            <>
+              {/* Version list */}
+              <div className="space-y-2">
+                {petition.versions.map((v) => {
+                  const isSelected = selectedVersionId === v.id && !compareVersionId;
+                  return (
+                    <div
+                      key={v.id}
+                      className={`bg-white border rounded-lg p-4 flex items-center justify-between transition-all ${
+                        isSelected
+                          ? "border-blue-400 ring-1 ring-blue-200"
+                          : "hover:border-gray-300"
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium">
+                          Version {v.versionNum}
+                        </span>
+                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
+                          {STAGE_LABELS[v.stage] || v.stage}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-500">
+                          {v.createdBy.name} &middot;{" "}
+                          {new Date(v.createdAt).toLocaleString()}
+                        </span>
+                        <button
+                          onClick={() => loadDiff(v.id)}
+                          className={`text-xs px-3 py-1 rounded font-medium ${
+                            isSelected
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          Red-line
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Version comparison controls */}
+              {petition.versions.length >= 2 && (
+                <div className="bg-gray-50 border rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                    Compare Versions
+                  </h4>
+                  <div className="flex items-center gap-3">
+                    <select
+                      className="border rounded px-3 py-1.5 text-sm"
+                      value={compareVersionId || ""}
+                      onChange={(e) => {
+                        const fromId = e.target.value;
+                        if (fromId && selectedVersionId && fromId !== selectedVersionId) {
+                          loadDiff(selectedVersionId, fromId);
+                        } else {
+                          setCompareVersionId(null);
+                        }
+                      }}
+                    >
+                      <option value="">Select base version...</option>
+                      {petition.versions
+                        .filter((v) => v.id !== selectedVersionId)
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            V{v.versionNum} ({STAGE_LABELS[v.stage] || v.stage})
+                          </option>
+                        ))}
+                    </select>
+                    <span className="text-sm text-gray-500">vs</span>
+                    <select
+                      className="border rounded px-3 py-1.5 text-sm"
+                      value={selectedVersionId || ""}
+                      onChange={(e) => {
+                        const toId = e.target.value;
+                        if (toId && compareVersionId && toId !== compareVersionId) {
+                          loadDiff(toId, compareVersionId);
+                        }
+                      }}
+                    >
+                      <option value="">Select target version...</option>
+                      {petition.versions
+                        .filter((v) => v.id !== compareVersionId)
+                        .map((v) => (
+                          <option key={v.id} value={v.id}>
+                            V{v.versionNum} ({STAGE_LABELS[v.stage] || v.stage})
+                          </option>
+                        ))}
+                    </select>
+                    {compareVersionId && (
+                      <button
+                        onClick={() => {
+                          setCompareVersionId(null);
+                          setDiffs(null);
+                          setSelectedVersionId(null);
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* Diff display */}
+              {diffLoading && (
+                <div className="text-center py-8 text-gray-500">
+                  Computing diff...
+                </div>
+              )}
+
+              {diffs && !diffLoading && (
+                <DiffViewer
+                  diffs={diffs}
+                  title={
+                    compareVersionId
+                      ? "Changes Between Versions"
+                      : "Proposed Changes (Red-line View)"
+                  }
+                />
+              )}
+            </>
           )}
         </div>
       )}
