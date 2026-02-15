@@ -186,9 +186,6 @@ export default function PublicPetitionDetailPage({
   const [petition, setPetition] = useState<PublicPetition | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<
-    "details" | "targets" | "history" | "votes"
-  >("details");
   const [diffs, setDiffs] = useState<TargetDiff[] | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
@@ -255,34 +252,19 @@ export default function PublicPetitionDetailPage({
   }
 
   const currentIdx = getStatusIndex(petition.status);
-  const hasVotes =
-    petition.assignments.some((a) => a.actions.length > 0) ||
-    petition.calendarItems.some((c) => c.actions.length > 0);
+  const hasCommitteeVotes = petition.assignments.some(
+    (a) => a.actions.length > 0
+  );
+  const hasPlenaryVotes = petition.calendarItems.some(
+    (c) => c.actions.length > 0
+  );
 
   return (
-    <div>
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <Link href="/browse" className="text-sm text-blue-600 hover:underline">
           &larr; Back to Browse
         </Link>
-      </div>
-
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          {petition.displayNumber && (
-            <span className="font-mono text-lg font-bold text-blue-700">
-              {petition.displayNumber}
-            </span>
-          )}
-          <PetitionStatusBadge status={petition.status} />
-        </div>
-        <h1 className="text-2xl font-bold">{petition.title}</h1>
-        <div className="text-sm text-gray-500 mt-1">
-          {ACTION_LABELS[petition.actionType]} &middot;{" "}
-          {BOOK_LABELS[petition.targetBook]} &middot; by{" "}
-          {petition.submitter.name} &middot; {petition.conference.name}
-        </div>
       </div>
 
       {/* Status timeline */}
@@ -317,344 +299,289 @@ export default function PublicPetitionDetailPage({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b mb-6">
-        {(["details", "targets", "votes", "history"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              activeTab === tab
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab === "details" && "Details"}
-            {tab === "targets" && `Targets (${petition.targets.length})`}
-            {tab === "votes" && `Votes${hasVotes ? "" : ""}`}
-            {tab === "history" && `History (${petition.versions.length})`}
-          </button>
-        ))}
-      </div>
-
-      {/* Details tab */}
-      {activeTab === "details" && (
-        <div className="space-y-6">
-          {petition.summary && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Summary
-              </h3>
-              <div className="bg-white border rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                {petition.summary}
-              </div>
-            </div>
-          )}
-          {petition.rationale && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Rationale
-              </h3>
-              <div className="bg-white border rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                {petition.rationale}
-              </div>
-            </div>
-          )}
-
-          {/* Committee assignments */}
-          {petition.assignments.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Committee Assignments
-              </h3>
-              <div className="space-y-2">
-                {petition.assignments.map((a) => (
-                  <div
-                    key={a.id}
-                    className="bg-white border rounded-lg p-3 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
-                        {a.committee.abbreviation}
-                      </span>
-                      <span className="text-sm text-gray-900">
-                        {a.committee.name}
-                      </span>
-                    </div>
-                    {a.actions.length > 0 && (
-                      <span
-                        className={`text-xs rounded-full px-2 py-0.5 font-medium ${COMMITTEE_ACTION_COLORS[a.actions[0].action]}`}
-                      >
-                        {COMMITTEE_ACTION_LABELS[a.actions[0].action]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-white border rounded-lg p-4">
-              <div className="text-gray-500">Submitted</div>
-              <div className="font-medium">
-                {new Date(petition.createdAt).toLocaleDateString()}
-              </div>
-            </div>
-            <div className="bg-white border rounded-lg p-4">
-              <div className="text-gray-500">Last Updated</div>
-              <div className="font-medium">
-                {new Date(petition.updatedAt).toLocaleDateString()}
-              </div>
-            </div>
+      {/* Full Petition Document */}
+      <div className="bg-white border rounded-lg p-6 sm:p-8 mb-6">
+        {/* Header - ADCA style */}
+        <div className="border-b pb-6 mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            {petition.displayNumber && (
+              <span className="font-mono text-lg font-bold text-blue-700">
+                {petition.displayNumber}
+              </span>
+            )}
+            <PetitionStatusBadge status={petition.status} />
+          </div>
+          <h1 className="text-2xl font-bold mb-3">{petition.title}</h1>
+          <div className="text-sm text-gray-600">
+            <span className="font-medium">
+              {ACTION_LABELS[petition.actionType]}
+            </span>{" "}
+            &mdash; {BOOK_LABELS[petition.targetBook]}
+          </div>
+          <div className="text-sm text-gray-500 mt-1">
+            Submitted by {petition.submitter.name} &middot;{" "}
+            {petition.conference.name} &middot;{" "}
+            {new Date(petition.createdAt).toLocaleDateString()}
           </div>
         </div>
-      )}
 
-      {/* Targets tab */}
-      {activeTab === "targets" && (
-        <div>
-          {petition.targets.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No targets specified.
-            </div>
-          ) : (
-            <div className="space-y-3">
+        {/* Summary */}
+        {petition.summary && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Summary
+            </h2>
+            <p className="text-gray-800 leading-relaxed">{petition.summary}</p>
+          </div>
+        )}
+
+        {/* Proposed Legislation (Targets) */}
+        {petition.targets.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Proposed Legislation
+            </h2>
+            <div className="space-y-6">
               {petition.targets.map((t) => (
-                <div key={t.id} className="bg-white border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5 font-medium">
+                <div key={t.id} className="border rounded-lg overflow-hidden">
+                  {/* Target header */}
+                  <div className="bg-gray-50 px-4 py-2 border-b flex items-center gap-2">
+                    <span className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5 font-medium">
                       {CHANGE_LABELS[t.changeType] || t.changeType}
                     </span>
                     {t.paragraph && (
-                      <span className="font-mono text-sm font-bold text-blue-700">
+                      <span className="font-mono text-sm font-bold text-gray-900">
                         &para;{t.paragraph.number}
                         {t.paragraph.title && (
-                          <span className="font-normal text-gray-600 font-sans">
-                            {" "}
-                            &mdash; {t.paragraph.title}
+                          <span className="font-normal text-gray-600 font-sans ml-1">
+                            {t.paragraph.title}
                           </span>
                         )}
                       </span>
                     )}
                     {t.resolution && (
-                      <span className="font-mono text-sm font-bold text-blue-700">
+                      <span className="font-mono text-sm font-bold text-gray-900">
                         R{t.resolution.resolutionNumber}
-                        <span className="font-normal text-gray-600 font-sans">
-                          {" "}
-                          &mdash; {t.resolution.title}
+                        <span className="font-normal text-gray-600 font-sans ml-1">
+                          {t.resolution.title}
                         </span>
                       </span>
                     )}
                   </div>
 
-                  {/* Current text */}
-                  {(t.paragraph?.currentText || t.resolution?.currentText) && (
-                    <div className="mt-2">
-                      <div className="text-xs font-medium text-gray-500 mb-1">
-                        Current Text
+                  <div className="p-4 space-y-4">
+                    {/* Current text */}
+                    {(t.paragraph?.currentText ||
+                      t.resolution?.currentText) && (
+                      <div>
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                          Current Text
+                        </div>
+                        <div className="bg-gray-50 rounded p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                          {t.paragraph?.currentText ||
+                            t.resolution?.currentText}
+                        </div>
                       </div>
-                      <div className="bg-gray-50 border rounded p-3 text-sm text-gray-700 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                        {t.paragraph?.currentText ||
-                          t.resolution?.currentText}
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Proposed text */}
-                  {t.proposedText && (
-                    <div className="mt-2">
-                      <div className="text-xs font-medium text-gray-500 mb-1">
-                        Proposed Text
+                    {/* Proposed text */}
+                    {t.proposedText && (
+                      <div>
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                          Proposed Text
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded p-4 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                          {t.proposedText}
+                        </div>
                       </div>
-                      <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-gray-800 whitespace-pre-wrap max-h-40 overflow-y-auto">
-                        {t.proposedText}
-                      </div>
-                    </div>
-                  )}
+                    )}
+
+                    {/* Delete target - show what's being removed */}
+                    {t.changeType === "DELETE_TEXT" ||
+                    t.changeType === "DELETE_PARAGRAPH"
+                      ? !t.proposedText && (
+                          <div className="bg-red-50 border border-red-200 rounded p-4 text-sm text-red-800 italic">
+                            This text is proposed for deletion.
+                          </div>
+                        )
+                      : null}
+                  </div>
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        )}
+
+        {/* Rationale */}
+        {petition.rationale && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Rationale
+            </h2>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+              {petition.rationale}
+            </div>
+          </div>
+        )}
+
+        {/* Dates */}
+        <div className="border-t pt-4 flex gap-6 text-xs text-gray-400">
+          <span>
+            Submitted {new Date(petition.createdAt).toLocaleDateString()}
+          </span>
+          <span>
+            Last updated {new Date(petition.updatedAt).toLocaleDateString()}
+          </span>
         </div>
-      )}
+      </div>
 
-      {/* Votes tab */}
-      {activeTab === "votes" && (
-        <div className="space-y-6">
-          {/* Committee votes */}
-          {petition.assignments.some((a) => a.actions.length > 0) && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Committee Votes
-              </h3>
-              <div className="space-y-3">
-                {petition.assignments
-                  .filter((a) => a.actions.length > 0)
-                  .map((a) =>
-                    a.actions.map((act) => (
-                      <div
-                        key={act.id}
-                        className="bg-white border rounded-lg p-4"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-mono text-xs font-bold bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
-                            {a.committee.abbreviation}
-                          </span>
-                          <span
-                            className={`text-xs rounded-full px-2 py-0.5 font-medium ${COMMITTEE_ACTION_COLORS[act.action]}`}
-                          >
-                            {COMMITTEE_ACTION_LABELS[act.action]}
-                          </span>
-                        </div>
-                        <div className="flex gap-6 text-sm">
-                          <span className="text-green-700">
-                            {act.votesFor} For
-                          </span>
-                          <span className="text-red-700">
-                            {act.votesAgainst} Against
-                          </span>
-                          <span className="text-gray-500">
-                            {act.votesAbstain} Abstain
-                          </span>
-                        </div>
-                        {act.notes && (
-                          <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded p-2">
-                            {act.notes}
-                          </p>
-                        )}
-                        <div className="text-xs text-gray-400 mt-2">
-                          {new Date(act.createdAt).toLocaleString()}
-                        </div>
-                      </div>
-                    ))
-                  )}
-              </div>
-            </div>
-          )}
-
-          {/* Plenary votes */}
-          {petition.calendarItems.some((c) => c.actions.length > 0) && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Plenary Votes
-              </h3>
-              <div className="space-y-3">
-                {petition.calendarItems
-                  .filter((c) => c.actions.length > 0)
-                  .map((c) =>
-                    c.actions.map((act) => (
-                      <div
-                        key={act.id}
-                        className="bg-white border rounded-lg p-4"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
-                            Session {c.plenarySession.sessionNumber}
-                          </span>
-                          <span
-                            className={`text-xs rounded-full px-2 py-0.5 font-medium ${PLENARY_ACTION_COLORS[act.action]}`}
-                          >
-                            {PLENARY_ACTION_LABELS[act.action]}
-                          </span>
-                        </div>
-                        <div className="flex gap-6 text-sm">
-                          <span className="text-green-700">
-                            {act.votesFor} For
-                          </span>
-                          <span className="text-red-700">
-                            {act.votesAgainst} Against
-                          </span>
-                          <span className="text-gray-500">
-                            {act.votesAbstain} Abstain
-                          </span>
-                        </div>
-                        {act.notes && (
-                          <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded p-2">
-                            {act.notes}
-                          </p>
-                        )}
-                        <div className="text-xs text-gray-400 mt-2">
-                          {new Date(act.createdAt).toLocaleString()}
-                        </div>
-                      </div>
-                    ))
-                  )}
-              </div>
-            </div>
-          )}
-
-          {!hasVotes && (
-            <div className="text-center py-8 text-gray-500">
-              No votes have been recorded for this petition yet.
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* History tab */}
-      {activeTab === "history" && (
-        <div className="space-y-6">
-          {petition.versions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No version history available.
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                {petition.versions.map((v) => {
-                  const isSelected = selectedVersionId === v.id;
-                  return (
-                    <div
-                      key={v.id}
-                      className={`bg-white border rounded-lg p-4 flex items-center justify-between transition-all ${
-                        isSelected
-                          ? "border-blue-400 ring-1 ring-blue-200"
-                          : ""
-                      }`}
+      {/* Committee Assignments & Votes */}
+      {(petition.assignments.length > 0 || hasCommitteeVotes) && (
+        <div className="bg-white border rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4">Committee Action</h2>
+          <div className="space-y-3">
+            {petition.assignments.map((a) => (
+              <div key={a.id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
+                      {a.committee.abbreviation}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {a.committee.name}
+                    </span>
+                  </div>
+                  {a.actions.length > 0 && (
+                    <span
+                      className={`text-xs rounded-full px-2 py-0.5 font-medium ${COMMITTEE_ACTION_COLORS[a.actions[0].action]}`}
                     >
-                      <div>
-                        <span className="font-medium">
-                          Version {v.versionNum}
-                        </span>
-                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
-                          {STAGE_LABELS[v.stage] || v.stage}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-gray-500">
-                          {v.createdBy.name} &middot;{" "}
-                          {new Date(v.createdAt).toLocaleString()}
-                        </span>
-                        <button
-                          onClick={() => loadDiff(v.id)}
-                          className={`text-xs px-3 py-1 rounded font-medium ${
-                            isSelected
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
-                        >
-                          Red-line
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {diffLoading && (
-                <div className="text-center py-8 text-gray-500">
-                  Computing diff...
+                      {COMMITTEE_ACTION_LABELS[a.actions[0].action]}
+                    </span>
+                  )}
                 </div>
-              )}
+                {a.actions.map((act) => (
+                  <div key={act.id} className="mt-2 pt-2 border-t">
+                    <div className="flex gap-6 text-sm">
+                      <span className="text-green-700">
+                        {act.votesFor} For
+                      </span>
+                      <span className="text-red-700">
+                        {act.votesAgainst} Against
+                      </span>
+                      <span className="text-gray-500">
+                        {act.votesAbstain} Abstain
+                      </span>
+                    </div>
+                    {act.notes && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        {act.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-              {diffs && !diffLoading && (
-                <DiffViewer
-                  diffs={diffs}
-                  title="Proposed Changes (Red-line View)"
-                />
+      {/* Plenary Votes */}
+      {hasPlenaryVotes && (
+        <div className="bg-white border rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4">Plenary Vote</h2>
+          <div className="space-y-3">
+            {petition.calendarItems
+              .filter((c) => c.actions.length > 0)
+              .map((c) =>
+                c.actions.map((act) => (
+                  <div key={act.id} className="border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs bg-gray-100 text-gray-700 rounded px-1.5 py-0.5">
+                        Session {c.plenarySession.sessionNumber}
+                      </span>
+                      <span
+                        className={`text-xs rounded-full px-2 py-0.5 font-medium ${PLENARY_ACTION_COLORS[act.action]}`}
+                      >
+                        {PLENARY_ACTION_LABELS[act.action]}
+                      </span>
+                    </div>
+                    <div className="flex gap-6 text-sm">
+                      <span className="text-green-700">
+                        {act.votesFor} For
+                      </span>
+                      <span className="text-red-700">
+                        {act.votesAgainst} Against
+                      </span>
+                      <span className="text-gray-500">
+                        {act.votesAbstain} Abstain
+                      </span>
+                    </div>
+                    {act.notes && (
+                      <p className="text-sm text-gray-600 mt-2">{act.notes}</p>
+                    )}
+                  </div>
+                ))
               )}
-            </>
+          </div>
+        </div>
+      )}
+
+      {/* Version History & Red-line */}
+      {petition.versions.length > 0 && (
+        <div className="bg-white border rounded-lg p-6 mb-6">
+          <h2 className="text-lg font-bold mb-4">Version History</h2>
+          <div className="space-y-2">
+            {petition.versions.map((v) => {
+              const isSelected = selectedVersionId === v.id;
+              return (
+                <div
+                  key={v.id}
+                  className={`border rounded-lg p-3 flex items-center justify-between transition-all ${
+                    isSelected
+                      ? "border-blue-400 ring-1 ring-blue-200"
+                      : ""
+                  }`}
+                >
+                  <div>
+                    <span className="font-medium">
+                      Version {v.versionNum}
+                    </span>
+                    <span className="ml-2 text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
+                      {STAGE_LABELS[v.stage] || v.stage}
+                    </span>
+                    <span className="ml-2 text-xs text-gray-500">
+                      {v.createdBy.name} &middot;{" "}
+                      {new Date(v.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => loadDiff(v.id)}
+                    className={`text-xs px-3 py-1 rounded font-medium ${
+                      isSelected
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Red-line
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {diffLoading && (
+            <div className="text-center py-6 text-gray-500">
+              Computing diff...
+            </div>
+          )}
+
+          {diffs && !diffLoading && (
+            <div className="mt-4">
+              <DiffViewer
+                diffs={diffs}
+                title="Proposed Changes (Red-line View)"
+              />
+            </div>
           )}
         </div>
       )}
