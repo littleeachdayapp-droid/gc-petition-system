@@ -8,7 +8,7 @@ import {
   PetitionStatus,
   CommitteeActionType,
   PlenaryActionType,
-} from "@/generated/prisma/client";
+} from "@prisma/client";
 
 interface Target {
   id: string;

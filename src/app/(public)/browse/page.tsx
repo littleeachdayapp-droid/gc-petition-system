@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { PetitionStatusBadge } from "@/components/petition-status-badge";
-import { PetitionStatus } from "@/generated/prisma/client";
+import { PetitionStatus } from "@prisma/client";
 
 interface PetitionSummary {
   id: string;

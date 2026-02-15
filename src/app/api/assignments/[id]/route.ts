@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { AssignmentStatus } from "@/generated/prisma/client";
+import { AssignmentStatus } from "@prisma/client";
 
 export async function PATCH(
   request: Request,

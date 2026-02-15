@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { UserRole, CommitteeRole } from "@/generated/prisma/client";
+import { UserRole, CommitteeRole } from "@prisma/client";
 
 interface CommitteeMembership {
   id: string;

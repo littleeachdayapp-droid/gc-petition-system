@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PetitionStatusBadge } from "@/components/petition-status-badge";
 import { DiffViewer, type TargetDiff } from "@/components/diff-viewer";
-import { PetitionStatus } from "@/generated/prisma/client";
+import { PetitionStatus } from "@prisma/client";
 
 interface Target {
   id: string;

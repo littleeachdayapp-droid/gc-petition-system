@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { ChangeType } from "@/generated/prisma/client";
+import { ChangeType } from "@prisma/client";
 
 export async function POST(
   request: Request,

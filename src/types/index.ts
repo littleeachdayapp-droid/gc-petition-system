@@ -21,7 +21,7 @@ export type {
   CalendarItem,
   PlenaryAction,
   SubmissionWindow,
-} from "@/generated/prisma/client";
+} from "@prisma/client";
 
 export type {
   UserRole,
@@ -36,7 +36,7 @@ export type {
   PlenaryTimeBlock,
   CalendarType,
   PlenaryActionType,
-} from "@/generated/prisma/client";
+} from "@prisma/client";
 
 /** Health check API response */
 export interface HealthResponse {

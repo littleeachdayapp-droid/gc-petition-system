@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { CommitteeRole } from "@/generated/prisma/client";
+import { CommitteeRole } from "@prisma/client";
 
 const VALID_COMMITTEE_ROLES: CommitteeRole[] = ["CHAIR", "VICE_CHAIR", "SECRETARY", "MEMBER"];
 

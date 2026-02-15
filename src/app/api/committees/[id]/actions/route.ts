@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { CommitteeActionType, PetitionStatus } from "@/generated/prisma/client";
+import { CommitteeActionType, PetitionStatus } from "@prisma/client";
 
 export async function POST(
   request: Request,

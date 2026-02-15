@@ -10,7 +10,7 @@ import {
   CommitteeActionType,
   CommitteeRole,
   UserRole,
-} from "@/generated/prisma/client";
+} from "@prisma/client";
 
 interface Member {
   id: string;

@@ -1,4 +1,4 @@
-import { PetitionStatus } from "@/generated/prisma/client";
+import { PetitionStatus } from "@prisma/client";
 
 const STATUS_CONFIG: Record<
   PetitionStatus,

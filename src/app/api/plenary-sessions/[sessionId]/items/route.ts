@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { CalendarType } from "@/generated/prisma/client";
+import { CalendarType } from "@prisma/client";
 
 export async function POST(
   request: Request,
