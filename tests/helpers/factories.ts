@@ -145,20 +145,52 @@ export async function createTestCalendarItem(petitionId: string, sessionId: stri
 
 /**
  * Clean up all test data created by factories.
+ * Deletes in correct order to respect foreign key constraints.
  */
 export async function cleanupTestData() {
-  // Delete test petitions (cascades to targets, versions, assignments, calendar items)
-  await prisma.petition.deleteMany({
+  const testPetitionIds = await prisma.petition.findMany({
     where: { title: { startsWith: TEST_PREFIX } },
+    select: { id: true },
   });
+  const ids = testPetitionIds.map((p) => p.id);
 
-  // Delete test users
-  await prisma.user.deleteMany({
-    where: { email: { startsWith: TEST_PREFIX } },
-  });
+  if (ids.length > 0) {
+    // Delete in FK-safe order: plenary actions → calendar items → committee actions → assignments → versions → targets → petitions
+    await prisma.plenaryAction.deleteMany({
+      where: { calendarItem: { petitionId: { in: ids } } },
+    });
+    await prisma.calendarItem.deleteMany({
+      where: { petitionId: { in: ids } },
+    });
+    await prisma.committeeAction.deleteMany({
+      where: { assignment: { petitionId: { in: ids } } },
+    });
+    await prisma.petitionAssignment.deleteMany({
+      where: { petitionId: { in: ids } },
+    });
+    await prisma.petitionVersion.deleteMany({
+      where: { petitionId: { in: ids } },
+    });
+    await prisma.petitionTarget.deleteMany({
+      where: { petitionId: { in: ids } },
+    });
+    await prisma.petition.deleteMany({
+      where: { id: { in: ids } },
+    });
+  }
 
   // Delete test plenary sessions (with high session numbers)
   await prisma.plenarySession.deleteMany({
     where: { sessionNumber: { gte: 100 } },
   });
+
+  // Delete test users (ignore FK errors from any remaining references)
+  try {
+    await prisma.user.deleteMany({
+      where: { email: { startsWith: TEST_PREFIX } },
+    });
+  } catch {
+    // Some test users may still be referenced by data created via API calls;
+    // this is harmless — they'll be cleaned up on next run or manually
+  }
 }

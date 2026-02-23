@@ -66,17 +66,21 @@ export async function POST(
         petitionStatus = "ON_CALENDAR";
     }
 
-    // Use interactive transaction to prevent duplicate votes
+    // Use interactive transaction with row lock to prevent duplicate votes
     const plenaryAction = await prisma.$transaction(async (tx) => {
-      // Verify item belongs to session inside transaction
-      const item = await tx.calendarItem.findUnique({
-        where: { id: itemId },
-        include: { petition: true },
-      });
+      // Lock the calendar item row with FOR UPDATE to serialize concurrent requests
+      const lockedRows = await tx.$queryRaw<Array<{ id: string; plenarySessionId: string; petitionId: string }>>`
+        SELECT ci.id, ci."plenarySessionId", ci."petitionId"
+        FROM "CalendarItem" ci
+        WHERE ci.id = ${itemId}
+        FOR UPDATE
+      `;
 
-      if (!item || item.plenarySessionId !== sessionId) {
+      if (lockedRows.length === 0 || lockedRows[0].plenarySessionId !== sessionId) {
         throw new TxError("Calendar item not found", 404);
       }
+
+      const item = lockedRows[0];
 
       // Check for existing final vote (ADOPT or DEFEAT) to prevent duplicates
       const existingFinalVote = await tx.plenaryAction.findFirst({

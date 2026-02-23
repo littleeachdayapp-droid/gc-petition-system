@@ -84,17 +84,21 @@ export async function POST(
         petitionStatus = "IN_COMMITTEE";
     }
 
-    // Use interactive transaction to prevent duplicate actions
+    // Use interactive transaction with row lock to prevent duplicate actions
     const committeeAction = await prisma.$transaction(async (tx) => {
-      // Re-verify assignment inside transaction
-      const assignment = await tx.petitionAssignment.findUnique({
-        where: { id: assignmentId },
-        include: { petition: true },
-      });
+      // Lock the assignment row with FOR UPDATE to serialize concurrent requests
+      const lockedRows = await tx.$queryRaw<Array<{ id: string; committeeId: string; petitionId: string }>>`
+        SELECT pa.id, pa."committeeId", pa."petitionId"
+        FROM "PetitionAssignment" pa
+        WHERE pa.id = ${assignmentId}
+        FOR UPDATE
+      `;
 
-      if (!assignment || assignment.committeeId !== committeeId) {
+      if (lockedRows.length === 0 || lockedRows[0].committeeId !== committeeId) {
         throw new TxError("Assignment not found for this committee", 404);
       }
+
+      const assignment = lockedRows[0];
 
       // Check if a final action already exists for this assignment
       const existingAction = await tx.committeeAction.findFirst({
