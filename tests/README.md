@@ -25,36 +25,42 @@ tests/
 ├── helpers/
 │   ├── setup.ts          # BASE_URL, getSessionCookie(), makeAuthFetch(), Prisma client
 │   └── factories.ts      # createTestPetition(), createTestDelegate(), cleanup helpers
-├── race-conditions/      # TOCTOU concurrency tests — 7 files, 8 tests
+├── race-conditions/      # TOCTOU concurrency tests — 8 files, 9 tests
 │   ├── double-submit.test.ts
 │   ├── committee-actions.test.ts
 │   ├── concurrent-amendments.test.ts
 │   ├── edit-submit-race.test.ts
 │   ├── concurrent-assignments.test.ts
 │   ├── plenary-votes.test.ts
-│   └── target-replace-submit.test.ts
-├── auth/                 # Authorization & role hierarchy — 2 files, 30 tests
+│   ├── target-replace-submit.test.ts
+│   └── display-number-stress.test.ts
+├── auth/                 # Authorization & role hierarchy — 3 files, 35 tests
 │   ├── role-access.test.ts
-│   └── admin-users.test.ts
-├── workflow/             # Status transitions & business logic — 7 files, 72 tests
+│   ├── admin-users.test.ts
+│   └── session-security.test.ts
+├── workflow/             # Status transitions & business logic — 10 files, 82 tests
 │   ├── submission.test.ts
 │   ├── committee-flow.test.ts
 │   ├── amendment-flow.test.ts
 │   ├── plenary-flow.test.ts
 │   ├── plenary-session-crud.test.ts
 │   ├── calendar-item-update.test.ts
-│   └── auto-routing.test.ts
-├── validation/           # Input validation & sanitization — 2 files, 24 tests
+│   ├── auto-routing.test.ts
+│   ├── full-lifecycle.test.ts
+│   └── calendar-re-add.test.ts
+├── validation/           # Input validation & sanitization — 3 files, 35 tests
 │   ├── input-validation.test.ts
-│   └── targets-validation.test.ts
+│   ├── targets-validation.test.ts
+│   └── edge-cases.test.ts
 ├── routing/              # Auto-routing logic (unit tests) — 1 file, 20 tests
 │   └── auto-routing.test.ts
-├── search/               # Search, filtering, pagination, APIs — 5 files, 37 tests
+├── search/               # Search, filtering, pagination, APIs — 6 files, 45 tests
 │   ├── search-pagination.test.ts
 │   ├── documents.test.ts
 │   ├── public-detail.test.ts
 │   ├── version-diff-api.test.ts
-│   └── endpoints-misc.test.ts
+│   ├── endpoints-misc.test.ts
+│   └── committee-endpoints.test.ts
 ├── integrity/            # Data integrity & cascades — 1 file, 8 tests
 │   └── data-integrity.test.ts
 ├── diff/                 # Diff engine (unit tests) — 1 file, 19 tests
@@ -74,7 +80,7 @@ tests/
 
 ## Test Suites
 
-### 1. Race Conditions (TOCTOU) — 7 files, 8 tests
+### 1. Race Conditions (TOCTOU) — 8 files, 9 tests
 
 Every mutation API route had time-of-check-time-of-use vulnerabilities where status checks happened in separate queries before transactions. All fixed with interactive `$transaction` and `SELECT ... FOR UPDATE` row locks.
 
@@ -87,8 +93,9 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 | `concurrent-assignments` | Two assign requests to same committee → duplicate | `$transaction` + P2002 unique constraint handling |
 | `plenary-votes` | Two concurrent ADOPT/DEFEAT votes → duplicate actions | `SELECT ... FOR UPDATE` row lock on calendar item |
 | `target-replace-submit` | Replace targets + submit concurrently → stale snapshot | Interactive `$transaction` re-checks DRAFT status |
+| `display-number-stress` | 5 concurrent submits of different petitions → unique display numbers | Serializable isolation prevents duplicates; some transactions retry-fail (expected) |
 
-### 2. Authorization & Role Hierarchy — 2 files, 30 tests
+### 2. Authorization & Role Hierarchy — 3 files, 35 tests
 
 **role-access.test.ts (17 tests):**
 - Admin pipeline access (DELEGATE→403, STAFF→200)
@@ -104,7 +111,13 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 - Role updates (change role, update delegationConference, invalid role→400)
 - Committee membership CRUD (add→201, duplicate→409, missing committeeId→400, remove→200, missing membershipId→400, non-existent→404, STAFF→403)
 
-### 3. Status Workflow & Transitions — 7 files, 72 tests
+**session-security.test.ts (5 tests):**
+- Invalid session cookie→401, no cookies→401
+- Role demotion enforced on re-login (STAFF→DELEGATE blocks admin access)
+- Protected API routes all require auth
+- Public API routes accessible without auth
+
+### 3. Status Workflow & Transitions — 10 files, 82 tests
 
 **submission.test.ts (6 tests):** Submit DRAFT, reject without targets, reject non-DRAFT, reject non-owner, reject editing/deleting non-DRAFT
 
@@ -120,17 +133,23 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 
 **auto-routing.test.ts (5 tests):** Route SUBMITTED→UNDER_REVIEW with assignments, reject non-SUBMITTED→400, reject non-existent→400, DELEGATE→403, idempotent routing (no duplicates)
 
-### 4. Input Validation & Sanitization — 2 files, 24 tests
+**full-lifecycle.test.ts (2 tests):** Complete adopt path (DRAFT→SUBMITTED→UNDER_REVIEW→IN_COMMITTEE→APPROVED_BY_COMMITTEE→ON_CALENDAR→ADOPTED) and defeat path (through REJECTED_BY_COMMITTEE→SPECIAL_ORDER→DEFEATED)
+
+**calendar-re-add.test.ts (3 tests):** Remove from calendar then re-add, amendment version sequencing (v1→v2→v3), calendar item ordering preserved
+
+### 4. Input Validation & Sanitization — 3 files, 35 tests
 
 **input-validation.test.ts (17 tests):** Missing petition fields (title, actionType, targetBook, conferenceId), non-existent conferenceId→404, XSS stored safely, SQL injection parameterized, committee action missing action/assignmentId, assignment from wrong committee, registration (missing name/email/password→400, short password→400, duplicate email→409, success→PUBLIC role), submit without targets→400
 
 **targets-validation.test.ts (7 tests):** Replace targets on DRAFT→200, empty array→400, missing changeType→400, missing paragraphId+resolutionId→400, non-DRAFT→400, non-existent petition→404, non-owner→403
 
+**edge-cases.test.ts (11 tests):** Unicode/emoji in titles, 10K char proposedText, invalid actionType/targetBook enums, pagination edge cases (page beyond total, limit 0, negative page), empty string title→400, zero vote counts accepted, display number immutability after submission, display number zero-padded format (P-YYYY-NNNN)
+
 ### 5. Auto-Routing Logic (Unit Tests) — 1 file, 20 tests
 
 Pure function tests for `isInRange()`, `routeParagraph()`, `routeResolution()`, `routeByTags()` with boundary values, multiple ranges, empty inputs.
 
-### 6. Search, Filtering, Pagination & APIs — 5 files, 37 tests
+### 6. Search, Filtering, Pagination & APIs — 6 files, 45 tests
 
 **search-pagination.test.ts (18 tests):** Auth search by title, status filter, mine=true, DRAFT visibility, special characters; public search excludes DRAFT, pagination metadata, limit clamp, sort by newest/title, status filter, invalid status, page 2 no overlap; admin pipeline + search; results adopted/defeated/summary
 
@@ -141,6 +160,8 @@ Pure function tests for `isInRange()`, `routeParagraph()`, `routeResolution()`, 
 **version-diff-api.test.ts (6 tests):** Version diffs with targets, DRAFT→404, non-existent→404, wrong petition→404, compareWith two versions, invalid compareWith→404
 
 **endpoints-misc.test.ts (4 tests):** Health endpoint (ok + counts), dashboard stats (auth→200, unauth→401), conferences list ordered by year
+
+**committee-endpoints.test.ts (8 tests):** Committee list with counts + alphabetical ordering, committee detail with memberships, 404 for non-existent, assignment listing + status filter, admin pipeline default excludes DRAFT/ADOPTED/DEFEATED, pipeline specific status filter
 
 ### 7. Data Integrity & Cascades — 1 file, 8 tests
 
@@ -156,12 +177,12 @@ Pure function tests for `computeDiff()`, `buildVersionDiffs()`, `compareVersionT
 
 | Suite | Files | Tests | Type |
 |-------|-------|-------|------|
-| Race Conditions | 7 | 8 | Integration |
-| Authorization | 2 | 30 | Integration |
-| Workflow | 7 | 72 | Integration |
-| Validation | 2 | 24 | Integration |
+| Race Conditions | 8 | 9 | Integration |
+| Authorization | 3 | 35 | Integration |
+| Workflow | 10 | 82 | Integration |
+| Validation | 3 | 35 | Integration |
 | Routing | 1 | 20 | Unit |
-| Search & APIs | 5 | 37 | Integration |
+| Search & APIs | 6 | 45 | Integration |
 | Data Integrity | 1 | 8 | Integration |
 | Diff Engine | 1 | 19 | Unit |
-| **Total** | **26** | **208** | |
+| **Total** | **32** | **238** | |
