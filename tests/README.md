@@ -50,11 +50,12 @@ tests/
 │   ├── full-lifecycle.test.ts
 │   ├── calendar-re-add.test.ts
 │   └── assignment-status.test.ts
-├── validation/           # Input validation & sanitization — 4 files, 49 tests
+├── validation/           # Input validation & sanitization — 5 files, 59 tests
 │   ├── input-validation.test.ts
 │   ├── targets-validation.test.ts
 │   ├── edge-cases.test.ts
-│   └── api-robustness.test.ts
+│   ├── api-robustness.test.ts
+│   └── error-paths.test.ts
 ├── routing/              # Auto-routing logic (unit tests) — 1 file, 20 tests
 │   └── auto-routing.test.ts
 ├── search/               # Search, filtering, pagination, APIs — 7 files, 54 tests
@@ -152,7 +153,7 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 
 **assignment-status.test.ts (8 tests):** IN_PROGRESS cascades petition to IN_COMMITTEE, COMPLETED does NOT cascade, DEFERRED accepted, COMPLETED→PENDING accepted (no state machine), invalid status→400, missing status→400, non-existent→404, manual assign to non-matching committee (advisory routing)
 
-### 4. Input Validation & Sanitization — 4 files, 49 tests
+### 4. Input Validation & Sanitization — 5 files, 59 tests
 
 **input-validation.test.ts (17 tests):** Missing petition fields (title, actionType, targetBook, conferenceId), non-existent conferenceId→404, XSS stored safely, SQL injection parameterized, committee action missing action/assignmentId, assignment from wrong committee, registration (missing name/email/password→400, short password→400, duplicate email→409, success→PUBLIC role), submit without targets→400
 
@@ -161,6 +162,8 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 **edge-cases.test.ts (11 tests):** Unicode/emoji in titles, 10K char proposedText, invalid actionType/targetBook enums, pagination edge cases (page beyond total, limit 0, negative page), empty string title→400, zero vote counts accepted, display number immutability after submission, display number zero-padded format (P-YYYY-NNNN)
 
 **api-robustness.test.ts (14 tests):** Malformed JSON→error, target with both paragraphId+resolutionId accepted, missing calendarType/petitionId→400, plenary vote defaults (0 votes), invalid date on session PATCH, non-existent book→empty array, invalid sort→default, amend DRAFT petition (no status check), empty amendedTargets accepted, session number immutable via PATCH, long search string, conflicting targets on same paragraph, 50 targets accepted
+
+**error-paths.test.ts (10 tests):** ADMIN deletes assignment successfully, PATCH/DELETE non-existent plenary session→500, PATCH non-existent user→500, committee membership with non-existent committeeId→500, target with non-existent paragraphId→500 (FK error), non-numeric paragraph number→500, invalid enum on committee assignments/admin pipeline→500, PATCH petition clears optional fields with empty strings
 
 ### 5. Auto-Routing Logic (Unit Tests) — 1 file, 20 tests
 
@@ -199,9 +202,9 @@ Pure function tests for `computeDiff()`, `buildVersionDiffs()`, `compareVersionT
 | Race Conditions | 8 | 9 | Integration |
 | Authorization | 4 | 44 | Integration |
 | Workflow | 11 | 90 | Integration |
-| Validation | 4 | 49 | Integration |
+| Validation | 5 | 59 | Integration |
 | Routing | 1 | 20 | Unit |
 | Search & APIs | 7 | 54 | Integration |
 | Data Integrity | 1 | 8 | Integration |
 | Diff Engine | 1 | 19 | Unit |
-| **Total** | **36** | **278** | |
+| **Total** | **37** | **288** | |
