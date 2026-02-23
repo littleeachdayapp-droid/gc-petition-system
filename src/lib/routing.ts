@@ -5,6 +5,7 @@
  */
 
 import { prisma } from "./prisma";
+import { Prisma } from "@prisma/client";
 
 export interface RoutingRules {
   paragraphRanges: Array<{ from: number; to: number }>;
@@ -72,26 +73,11 @@ export function routeByTags(
  * 3. Fall back to tag-based matching if no range matches
  * 4. Deduplicate and create PetitionAssignment for each matching committee
  * 5. Update petition status to UNDER_REVIEW
+ *
+ * Uses interactive transaction with P2002 handling to prevent duplicate assignments.
  */
 export async function autoRoutePetition(petitionId: string) {
-  const petition = await prisma.petition.findUnique({
-    where: { id: petitionId },
-    include: {
-      targets: {
-        include: {
-          paragraph: { select: { number: true, categoryTags: true } },
-          resolution: { select: { resolutionNumber: true, topicGroup: true } },
-        },
-      },
-    },
-  });
-
-  if (!petition) throw new Error("Petition not found");
-  if (petition.status !== "SUBMITTED") {
-    throw new Error("Only SUBMITTED petitions can be routed");
-  }
-
-  // Load all committees with routing rules
+  // Load committees (static data, safe to read outside transaction)
   const committees = await prisma.committee.findMany();
   const committeeRules: CommitteeWithRules[] = committees.map((c) => ({
     id: c.id,
@@ -99,71 +85,98 @@ export async function autoRoutePetition(petitionId: string) {
     rules: c.routingRulesJson as unknown as RoutingRules,
   }));
 
-  // Find matching committees
-  const matchedAbbreviations = new Set<string>();
+  // Use interactive transaction for all mutable state
+  const result = await prisma.$transaction(async (tx) => {
+    const petition = await tx.petition.findUnique({
+      where: { id: petitionId },
+      include: {
+        targets: {
+          include: {
+            paragraph: { select: { number: true, categoryTags: true } },
+            resolution: { select: { resolutionNumber: true, topicGroup: true } },
+          },
+        },
+      },
+    });
 
-  for (const target of petition.targets) {
-    if (target.paragraph) {
-      const matches = routeParagraph(target.paragraph.number, committeeRules);
-      matches.forEach((m) => matchedAbbreviations.add(m));
+    if (!petition) throw new Error("Petition not found");
+    if (petition.status !== "SUBMITTED") {
+      throw new Error("Only SUBMITTED petitions can be routed");
+    }
 
-      // Tag fallback if no range match
-      if (matches.length === 0 && target.paragraph.categoryTags.length > 0) {
-        const tagMatches = routeByTags(
-          target.paragraph.categoryTags,
+    // Find matching committees
+    const matchedAbbreviations = new Set<string>();
+
+    for (const target of petition.targets) {
+      if (target.paragraph) {
+        const matches = routeParagraph(target.paragraph.number, committeeRules);
+        matches.forEach((m) => matchedAbbreviations.add(m));
+
+        // Tag fallback if no range match
+        if (matches.length === 0 && target.paragraph.categoryTags.length > 0) {
+          const tagMatches = routeByTags(
+            target.paragraph.categoryTags,
+            committeeRules
+          );
+          tagMatches.forEach((m) => matchedAbbreviations.add(m));
+        }
+      }
+
+      if (target.resolution) {
+        const matches = routeResolution(
+          target.resolution.resolutionNumber,
           committeeRules
         );
-        tagMatches.forEach((m) => matchedAbbreviations.add(m));
+        matches.forEach((m) => matchedAbbreviations.add(m));
       }
     }
 
-    if (target.resolution) {
-      const matches = routeResolution(
-        target.resolution.resolutionNumber,
-        committeeRules
-      );
-      matches.forEach((m) => matchedAbbreviations.add(m));
+    // Look up committee IDs for matched abbreviations
+    const matchedCommittees = committees.filter((c) =>
+      matchedAbbreviations.has(c.abbreviation)
+    );
+
+    // Check for existing assignments inside transaction
+    const existingAssignments = await tx.petitionAssignment.findMany({
+      where: { petitionId },
+      select: { committeeId: true },
+    });
+    const existingIds = new Set(existingAssignments.map((a) => a.committeeId));
+
+    const newCommittees = matchedCommittees.filter(
+      (c) => !existingIds.has(c.id)
+    );
+
+    // Create assignments inside transaction
+    for (const c of newCommittees) {
+      try {
+        await tx.petitionAssignment.create({
+          data: {
+            petitionId,
+            committeeId: c.id,
+            status: "PENDING",
+          },
+        });
+      } catch (error) {
+        // Handle P2002 (unique constraint) gracefully - skip duplicate
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          continue;
+        }
+        throw error;
+      }
     }
-  }
 
-  // Look up committee IDs for matched abbreviations
-  const matchedCommittees = committees.filter((c) =>
-    matchedAbbreviations.has(c.abbreviation)
-  );
-
-  // Check for existing assignments to avoid duplicates
-  const existingAssignments = await prisma.petitionAssignment.findMany({
-    where: { petitionId },
-    select: { committeeId: true },
-  });
-  const existingIds = new Set(existingAssignments.map((a) => a.committeeId));
-
-  const newCommittees = matchedCommittees.filter(
-    (c) => !existingIds.has(c.id)
-  );
-
-  // Create assignments and update status in a transaction
-  const result = await prisma.$transaction([
-    ...newCommittees.map((c) =>
-      prisma.petitionAssignment.create({
-        data: {
-          petitionId,
-          committeeId: c.id,
-          status: "PENDING",
-        },
-      })
-    ),
-    prisma.petition.update({
+    await tx.petition.update({
       where: { id: petitionId },
       data: { status: "UNDER_REVIEW" },
-    }),
-  ]);
+    });
 
-  return {
-    assignedTo: matchedCommittees.map((c) => c.abbreviation),
-    newAssignments: newCommittees.length,
-    petitionStatus: "UNDER_REVIEW",
-    // Last element is the updated petition
-    petition: result[result.length - 1],
-  };
+    return {
+      assignedTo: matchedCommittees.map((c) => c.abbreviation),
+      newAssignments: newCommittees.length,
+      petitionStatus: "UNDER_REVIEW" as const,
+    };
+  });
+
+  return result;
 }

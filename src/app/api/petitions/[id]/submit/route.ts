@@ -14,81 +14,70 @@ export async function POST(
 
     const { id } = await params;
 
-    const petition = await prisma.petition.findUnique({
-      where: { id },
-      include: {
-        targets: true,
-        conference: true,
-      },
-    });
+    // Perform all checks and mutations inside an interactive transaction
+    const updated = await prisma.$transaction(async (tx) => {
+      // Re-read petition inside transaction for consistency
+      const petition = await tx.petition.findUnique({
+        where: { id },
+        include: {
+          targets: true,
+          conference: true,
+        },
+      });
 
-    if (!petition) {
-      return NextResponse.json(
-        { error: "Petition not found" },
-        { status: 404 }
-      );
-    }
+      if (!petition) {
+        throw new TxError("Petition not found", 404);
+      }
 
-    if (petition.status !== "DRAFT") {
-      return NextResponse.json(
-        { error: "Only draft petitions can be submitted" },
-        { status: 400 }
-      );
-    }
+      if (petition.status !== "DRAFT") {
+        throw new TxError("Only draft petitions can be submitted", 400);
+      }
 
-    if (petition.submitterId !== user.id && !hasMinRole(user.role, "STAFF")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+      if (petition.submitterId !== user.id && !hasMinRole(user.role, "STAFF")) {
+        throw new TxError("Forbidden", 403);
+      }
 
-    // Validate petition has required content
-    if (!petition.title) {
-      return NextResponse.json(
-        { error: "Petition must have a title" },
-        { status: 400 }
-      );
-    }
+      if (!petition.title) {
+        throw new TxError("Petition must have a title", 400);
+      }
 
-    if (petition.targets.length === 0) {
-      return NextResponse.json(
-        { error: "Petition must have at least one target" },
-        { status: 400 }
-      );
-    }
+      if (petition.targets.length === 0) {
+        throw new TxError("Petition must have at least one target", 400);
+      }
 
-    // Generate display number: P-{year}-{NNNN}
-    const year = petition.conference.year;
-    const count = await prisma.petition.count({
-      where: {
-        conferenceId: petition.conferenceId,
-        displayNumber: { not: null },
-      },
-    });
-    const displayNumber = `P-${year}-${String(count + 1).padStart(4, "0")}`;
+      // Generate display number inside transaction to prevent collisions
+      const year = petition.conference.year;
+      const count = await tx.petition.count({
+        where: {
+          conferenceId: petition.conferenceId,
+          displayNumber: { not: null },
+        },
+      });
+      const displayNumber = `P-${year}-${String(count + 1).padStart(4, "0")}`;
 
-    // Create version snapshot
-    const fullPetition = await prisma.petition.findUnique({
-      where: { id },
-      include: {
-        targets: {
-          include: {
-            paragraph: {
-              select: { number: true, title: true, currentText: true },
-            },
-            resolution: {
-              select: {
-                resolutionNumber: true,
-                title: true,
-                currentText: true,
+      // Load full petition for version snapshot
+      const fullPetition = await tx.petition.findUnique({
+        where: { id },
+        include: {
+          targets: {
+            include: {
+              paragraph: {
+                select: { number: true, title: true, currentText: true },
+              },
+              resolution: {
+                select: {
+                  resolutionNumber: true,
+                  title: true,
+                  currentText: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    // Submit petition + create version in a transaction
-    const [updated] = await prisma.$transaction([
-      prisma.petition.update({
+      // Update petition status and create version
+      const result = await tx.petition.update({
         where: { id },
         data: {
           status: "SUBMITTED",
@@ -108,8 +97,9 @@ export async function POST(
             },
           },
         },
-      }),
-      prisma.petitionVersion.create({
+      });
+
+      await tx.petitionVersion.create({
         data: {
           petitionId: id,
           versionNum: 1,
@@ -117,14 +107,27 @@ export async function POST(
           snapshotJson: JSON.parse(JSON.stringify(fullPetition)),
           createdById: user.id,
         },
-      }),
-    ]);
+      });
+
+      return result;
+    });
 
     return NextResponse.json(updated);
-  } catch {
+  } catch (error) {
+    if (error instanceof TxError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     return NextResponse.json(
       { error: "Failed to submit petition" },
       { status: 500 }
     );
+  }
+}
+
+class TxError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
   }
 }

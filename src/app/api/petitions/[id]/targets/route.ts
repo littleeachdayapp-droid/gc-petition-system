@@ -15,26 +15,6 @@ export async function POST(
 
     const { id } = await params;
 
-    const petition = await prisma.petition.findUnique({ where: { id } });
-
-    if (!petition) {
-      return NextResponse.json(
-        { error: "Petition not found" },
-        { status: 404 }
-      );
-    }
-
-    if (petition.status !== "DRAFT") {
-      return NextResponse.json(
-        { error: "Targets can only be modified on draft petitions" },
-        { status: 400 }
-      );
-    }
-
-    if (petition.submitterId !== user.id && !hasMinRole(user.role, "STAFF")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { targets } = body;
 
@@ -64,27 +44,42 @@ export async function POST(
       }
     }
 
-    // Replace all existing targets with new ones
-    await prisma.$transaction([
-      prisma.petitionTarget.deleteMany({ where: { petitionId: id } }),
-      ...targets.map(
-        (target: {
-          paragraphId?: string;
-          resolutionId?: string;
-          changeType: ChangeType;
-          proposedText?: string;
-        }) =>
-          prisma.petitionTarget.create({
-            data: {
-              petitionId: id,
-              paragraphId: target.paragraphId || null,
-              resolutionId: target.resolutionId || null,
-              changeType: target.changeType,
-              proposedText: target.proposedText || null,
-            },
-          })
-      ),
-    ]);
+    // Use interactive transaction to re-check status before modifying targets
+    await prisma.$transaction(async (tx) => {
+      const petition = await tx.petition.findUnique({ where: { id } });
+
+      if (!petition) {
+        throw new TxError("Petition not found", 404);
+      }
+
+      if (petition.status !== "DRAFT") {
+        throw new TxError("Targets can only be modified on draft petitions", 400);
+      }
+
+      if (petition.submitterId !== user.id && !hasMinRole(user.role, "STAFF")) {
+        throw new TxError("Forbidden", 403);
+      }
+
+      // Delete existing and create new targets inside the transaction
+      await tx.petitionTarget.deleteMany({ where: { petitionId: id } });
+
+      for (const target of targets as Array<{
+        paragraphId?: string;
+        resolutionId?: string;
+        changeType: ChangeType;
+        proposedText?: string;
+      }>) {
+        await tx.petitionTarget.create({
+          data: {
+            petitionId: id,
+            paragraphId: target.paragraphId || null,
+            resolutionId: target.resolutionId || null,
+            changeType: target.changeType,
+            proposedText: target.proposedText || null,
+          },
+        });
+      }
+    });
 
     const updated = await prisma.petitionTarget.findMany({
       where: { petitionId: id },
@@ -99,10 +94,21 @@ export async function POST(
     });
 
     return NextResponse.json(updated);
-  } catch {
+  } catch (error) {
+    if (error instanceof TxError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     return NextResponse.json(
       { error: "Failed to update targets" },
       { status: 500 }
     );
+  }
+}
+
+class TxError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
   }
 }

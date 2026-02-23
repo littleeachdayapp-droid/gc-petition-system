@@ -42,44 +42,41 @@ export async function POST(
       }
     }
 
-    // Load full petition for snapshot
-    const petition = await prisma.petition.findUnique({
-      where: { id: petitionId },
-      include: {
-        targets: {
-          include: {
-            paragraph: {
-              select: { number: true, title: true, currentText: true },
-            },
-            resolution: {
-              select: {
-                resolutionNumber: true,
-                title: true,
-                currentText: true,
+    // Use interactive transaction to prevent version number collisions
+    const version = await prisma.$transaction(async (tx) => {
+      // Load full petition for snapshot inside transaction
+      const petition = await tx.petition.findUnique({
+        where: { id: petitionId },
+        include: {
+          targets: {
+            include: {
+              paragraph: {
+                select: { number: true, title: true, currentText: true },
+              },
+              resolution: {
+                select: {
+                  resolutionNumber: true,
+                  title: true,
+                  currentText: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!petition) {
-      return NextResponse.json(
-        { error: "Petition not found" },
-        { status: 404 }
-      );
-    }
+      if (!petition) {
+        throw new TxError("Petition not found", 404);
+      }
 
-    // Get next version number
-    const lastVersion = await prisma.petitionVersion.findFirst({
-      where: { petitionId },
-      orderBy: { versionNum: "desc" },
-    });
-    const nextVersionNum = (lastVersion?.versionNum || 0) + 1;
+      // Get next version number inside transaction
+      const lastVersion = await tx.petitionVersion.findFirst({
+        where: { petitionId },
+        orderBy: { versionNum: "desc" },
+      });
+      const nextVersionNum = (lastVersion?.versionNum || 0) + 1;
 
-    // Create amended version and update petition status
-    const [version] = await prisma.$transaction([
-      prisma.petitionVersion.create({
+      const created = await tx.petitionVersion.create({
         data: {
           petitionId,
           versionNum: nextVersionNum,
@@ -88,18 +85,32 @@ export async function POST(
           deltaJson: amendedTargets,
           createdById: user.id,
         },
-      }),
-      prisma.petition.update({
+      });
+
+      await tx.petition.update({
         where: { id: petitionId },
         data: { status: "AMENDED" },
-      }),
-    ]);
+      });
+
+      return created;
+    });
 
     return NextResponse.json(version, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof TxError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     return NextResponse.json(
       { error: "Failed to create amendment" },
       { status: 500 }
     );
+  }
+}
+
+class TxError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
   }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, hasMinRole } from "@/lib/auth-helpers";
-import { PlenaryActionType, PetitionStatus, Prisma } from "@prisma/client";
+import { PlenaryActionType, PetitionStatus } from "@prisma/client";
 
 export async function POST(
   request: Request,
@@ -43,19 +43,6 @@ export async function POST(
       );
     }
 
-    // Verify item belongs to session
-    const item = await prisma.calendarItem.findUnique({
-      where: { id: itemId },
-      include: { petition: true },
-    });
-
-    if (!item || item.plenarySessionId !== sessionId) {
-      return NextResponse.json(
-        { error: "Calendar item not found" },
-        { status: 404 }
-      );
-    }
-
     // Determine petition status based on action
     let petitionStatus: PetitionStatus;
     switch (action) {
@@ -79,10 +66,31 @@ export async function POST(
         petitionStatus = "ON_CALENDAR";
     }
 
-    // Create action and update petition status
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transactions: Prisma.PrismaPromise<any>[] = [
-      prisma.plenaryAction.create({
+    // Use interactive transaction to prevent duplicate votes
+    const plenaryAction = await prisma.$transaction(async (tx) => {
+      // Verify item belongs to session inside transaction
+      const item = await tx.calendarItem.findUnique({
+        where: { id: itemId },
+        include: { petition: true },
+      });
+
+      if (!item || item.plenarySessionId !== sessionId) {
+        throw new TxError("Calendar item not found", 404);
+      }
+
+      // Check for existing final vote (ADOPT or DEFEAT) to prevent duplicates
+      const existingFinalVote = await tx.plenaryAction.findFirst({
+        where: {
+          calendarItemId: itemId,
+          action: { in: ["ADOPT", "DEFEAT"] },
+        },
+      });
+
+      if (existingFinalVote) {
+        throw new TxError("A final vote has already been recorded for this item", 409);
+      }
+
+      const created = await tx.plenaryAction.create({
         data: {
           calendarItemId: itemId,
           action: action as PlenaryActionType,
@@ -91,43 +99,42 @@ export async function POST(
           votesAbstain: votesAbstain || 0,
           notes: notes || null,
         },
-      }),
-      prisma.petition.update({
+      });
+
+      await tx.petition.update({
         where: { id: item.petitionId },
         data: { status: petitionStatus },
-      }),
-    ];
+      });
 
-    // If AMEND, also create a PLENARY_AMENDED version
-    if (action === "AMEND") {
-      const fullPetition = await prisma.petition.findUnique({
-        where: { id: item.petitionId },
-        include: {
-          targets: {
-            include: {
-              paragraph: {
-                select: { number: true, title: true, currentText: true },
-              },
-              resolution: {
-                select: {
-                  resolutionNumber: true,
-                  title: true,
-                  currentText: true,
+      // If AMEND, also create a PLENARY_AMENDED version
+      if (action === "AMEND") {
+        const fullPetition = await tx.petition.findUnique({
+          where: { id: item.petitionId },
+          include: {
+            targets: {
+              include: {
+                paragraph: {
+                  select: { number: true, title: true, currentText: true },
+                },
+                resolution: {
+                  select: {
+                    resolutionNumber: true,
+                    title: true,
+                    currentText: true,
+                  },
                 },
               },
             },
           },
-        },
-      });
+        });
 
-      const lastVersion = await prisma.petitionVersion.findFirst({
-        where: { petitionId: item.petitionId },
-        orderBy: { versionNum: "desc" },
-      });
-      const nextVersionNum = (lastVersion?.versionNum || 0) + 1;
+        const lastVersion = await tx.petitionVersion.findFirst({
+          where: { petitionId: item.petitionId },
+          orderBy: { versionNum: "desc" },
+        });
+        const nextVersionNum = (lastVersion?.versionNum || 0) + 1;
 
-      transactions.push(
-        prisma.petitionVersion.create({
+        await tx.petitionVersion.create({
           data: {
             petitionId: item.petitionId,
             versionNum: nextVersionNum,
@@ -136,17 +143,28 @@ export async function POST(
             deltaJson: { action: "AMEND", notes: notes || null },
             createdById: user.id,
           },
-        })
-      );
-    }
+        });
+      }
 
-    const [plenaryAction] = await prisma.$transaction(transactions);
+      return created;
+    });
 
     return NextResponse.json(plenaryAction, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof TxError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     return NextResponse.json(
       { error: "Failed to record vote" },
       { status: 500 }
     );
+  }
+}
+
+class TxError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
   }
 }

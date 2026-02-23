@@ -44,19 +44,6 @@ export async function POST(
       );
     }
 
-    // Verify assignment belongs to this committee
-    const assignment = await prisma.petitionAssignment.findUnique({
-      where: { id: assignmentId },
-      include: { petition: true },
-    });
-
-    if (!assignment || assignment.committeeId !== committeeId) {
-      return NextResponse.json(
-        { error: "Assignment not found for this committee" },
-        { status: 404 }
-      );
-    }
-
     // Verify user is a member of this committee (or STAFF+)
     if (!hasMinRole(user.role, "STAFF")) {
       const membership = await prisma.committeeMembership.findUnique({
@@ -97,9 +84,31 @@ export async function POST(
         petitionStatus = "IN_COMMITTEE";
     }
 
-    // Create action, update assignment to COMPLETED, update petition status
-    const [committeeAction] = await prisma.$transaction([
-      prisma.committeeAction.create({
+    // Use interactive transaction to prevent duplicate actions
+    const committeeAction = await prisma.$transaction(async (tx) => {
+      // Re-verify assignment inside transaction
+      const assignment = await tx.petitionAssignment.findUnique({
+        where: { id: assignmentId },
+        include: { petition: true },
+      });
+
+      if (!assignment || assignment.committeeId !== committeeId) {
+        throw new TxError("Assignment not found for this committee", 404);
+      }
+
+      // Check if a final action already exists for this assignment
+      const existingAction = await tx.committeeAction.findFirst({
+        where: {
+          assignmentId,
+          action: { in: ["APPROVE", "REJECT", "AMEND_AND_APPROVE", "NO_ACTION"] },
+        },
+      });
+
+      if (existingAction) {
+        throw new TxError("A final action has already been recorded for this assignment", 409);
+      }
+
+      const created = await tx.committeeAction.create({
         data: {
           assignmentId,
           committeeId,
@@ -109,22 +118,37 @@ export async function POST(
           votesAbstain: votesAbstain || 0,
           notes: notes || null,
         },
-      }),
-      prisma.petitionAssignment.update({
+      });
+
+      await tx.petitionAssignment.update({
         where: { id: assignmentId },
         data: { status: action === "DEFER" ? "DEFERRED" : "COMPLETED" },
-      }),
-      prisma.petition.update({
+      });
+
+      await tx.petition.update({
         where: { id: assignment.petitionId },
         data: { status: petitionStatus },
-      }),
-    ]);
+      });
+
+      return created;
+    });
 
     return NextResponse.json(committeeAction, { status: 201 });
-  } catch {
+  } catch (error) {
+    if (error instanceof TxError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     return NextResponse.json(
       { error: "Failed to record action" },
       { status: 500 }
     );
+  }
+}
+
+class TxError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
   }
 }
