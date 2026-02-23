@@ -33,18 +33,28 @@ tests/
 │   ├── concurrent-assignments.test.ts
 │   ├── plenary-votes.test.ts
 │   └── target-replace-submit.test.ts
-├── auth/                 # Authorization & role hierarchy — 1 file, 17 tests
-│   └── role-access.test.ts
-├── workflow/             # Status transitions & business logic — 3 files, 32 tests
+├── auth/                 # Authorization & role hierarchy — 2 files, 30 tests
+│   ├── role-access.test.ts
+│   └── admin-users.test.ts
+├── workflow/             # Status transitions & business logic — 7 files, 72 tests
 │   ├── submission.test.ts
 │   ├── committee-flow.test.ts
-│   └── plenary-flow.test.ts
-├── validation/           # Input validation & sanitization — 1 file, 17 tests
-│   └── input-validation.test.ts
+│   ├── amendment-flow.test.ts
+│   ├── plenary-flow.test.ts
+│   ├── plenary-session-crud.test.ts
+│   ├── calendar-item-update.test.ts
+│   └── auto-routing.test.ts
+├── validation/           # Input validation & sanitization — 2 files, 24 tests
+│   ├── input-validation.test.ts
+│   └── targets-validation.test.ts
 ├── routing/              # Auto-routing logic (unit tests) — 1 file, 20 tests
 │   └── auto-routing.test.ts
-├── search/               # Search, filtering, pagination — 1 file, 18 tests
-│   └── search-pagination.test.ts
+├── search/               # Search, filtering, pagination, APIs — 5 files, 37 tests
+│   ├── search-pagination.test.ts
+│   ├── documents.test.ts
+│   ├── public-detail.test.ts
+│   ├── version-diff-api.test.ts
+│   └── endpoints-misc.test.ts
 ├── integrity/            # Data integrity & cascades — 1 file, 8 tests
 │   └── data-integrity.test.ts
 ├── diff/                 # Diff engine (unit tests) — 1 file, 19 tests
@@ -78,115 +88,67 @@ Every mutation API route had time-of-check-time-of-use vulnerabilities where sta
 | `plenary-votes` | Two concurrent ADOPT/DEFEAT votes → duplicate actions | `SELECT ... FOR UPDATE` row lock on calendar item |
 | `target-replace-submit` | Replace targets + submit concurrently → stale snapshot | Interactive `$transaction` re-checks DRAFT status |
 
-### 2. Authorization & Role Hierarchy — 1 file, 17 tests
+### 2. Authorization & Role Hierarchy — 2 files, 30 tests
 
-Tests that every endpoint enforces correct role requirements. Role hierarchy: PUBLIC → DELEGATE → COMMITTEE_MEMBER → COMMITTEE_CHAIR → STAFF → ADMIN → SUPER_ADMIN.
+**role-access.test.ts (17 tests):**
+- Admin pipeline access (DELEGATE→403, STAFF→200)
+- User list access (STAFF→403, ADMIN→200)
+- Role escalation prevention (ADMIN cannot assign SUPER_ADMIN, cannot change own role)
+- Committee membership enforcement (non-member→403)
+- DRAFT visibility (non-owner→403, STAFF→200)
+- Edit/delete ownership (non-owner→403, STAFF can edit, ADMIN required to delete others')
+- Unauthenticated→401, assignment management access
 
-| Test | Endpoint | Expected |
-|------|----------|----------|
-| DELEGATE cannot access admin pipeline | `GET /api/admin/pipeline` | 403 |
-| STAFF can access admin pipeline | `GET /api/admin/pipeline` | 200 |
-| STAFF cannot access user list (ADMIN required) | `GET /api/admin/users` | 403 |
-| ADMIN can access user list | `GET /api/admin/users` | 200 |
-| ADMIN cannot assign SUPER_ADMIN role | `PATCH /api/admin/users/[userId]` | 403 |
-| ADMIN cannot change their own role | `PATCH /api/admin/users/[userId]` | 400 |
-| DELEGATE cannot assign petitions | `POST /api/petitions/[id]/assign` | 403 |
-| PUBLIC cannot record committee action | `POST /api/committees/[id]/actions` | 403 |
-| Non-member cannot act on committee | `POST /api/committees/[id]/actions` | 403 |
-| Non-owner cannot see another's DRAFT | `GET /api/petitions/[id]` | 403 |
-| STAFF can view any DRAFT | `GET /api/petitions/[id]` | 200 |
-| Non-owner, non-STAFF cannot edit DRAFT | `PATCH /api/petitions/[id]` | 403 |
-| STAFF can edit any DRAFT | `PATCH /api/petitions/[id]` | 200 |
-| Non-owner, non-ADMIN cannot delete DRAFT | `DELETE /api/petitions/[id]` | 403 |
-| Unauthenticated request to protected endpoint | All | 401 |
-| DELEGATE cannot update assignment status | `PATCH /api/assignments/[id]` | 403 |
-| STAFF cannot delete assignment (ADMIN required) | `DELETE /api/assignments/[id]` | 403 |
+**admin-users.test.ts (13 tests):**
+- User list with memberships (ADMIN→200, STAFF→403, DELEGATE→403)
+- Role updates (change role, update delegationConference, invalid role→400)
+- Committee membership CRUD (add→201, duplicate→409, missing committeeId→400, remove→200, missing membershipId→400, non-existent→404, STAFF→403)
 
-### 3. Status Workflow & Transitions — 3 files, 32 tests
+### 3. Status Workflow & Transitions — 7 files, 72 tests
 
-Tests every valid and invalid status transition in the petition lifecycle.
+**submission.test.ts (6 tests):** Submit DRAFT, reject without targets, reject non-DRAFT, reject non-owner, reject editing/deleting non-DRAFT
 
-**Submission flow (6 tests):**
-- Submit DRAFT with valid targets → SUBMITTED + displayNumber + ORIGINAL version
-- Submit DRAFT without targets → 400
-- Submit non-DRAFT petition → 400
-- Submit by non-owner, non-STAFF → 403
-- Edit non-DRAFT petition → 400
-- Delete non-DRAFT petition → 400
+**committee-flow.test.ts (12 tests):** Assignment flow (SUBMITTED→UNDER_REVIEW, reject DRAFT, reject duplicate, reject non-existent), all 6 committee actions (APPROVE→APPROVED_BY_COMMITTEE, REJECT, AMEND_AND_APPROVE, DEFER, REFER, NO_ACTION), reject second action, IN_PROGRESS→IN_COMMITTEE
 
-**Committee flow (12 tests):**
-- Assign SUBMITTED → UNDER_REVIEW + PENDING assignment
-- Reject assigning DRAFT
-- Reject duplicate assignment to same committee
-- Reject assigning to non-existent committee
-- APPROVE → APPROVED_BY_COMMITTEE, assignment COMPLETED
-- REJECT → REJECTED_BY_COMMITTEE
-- AMEND_AND_APPROVE → AMENDED
-- DEFER → IN_COMMITTEE, assignment DEFERRED
-- REFER → UNDER_REVIEW
-- NO_ACTION → REJECTED_BY_COMMITTEE
-- Reject second final action on same assignment
-- Assignment IN_PROGRESS → petition IN_COMMITTEE
+**amendment-flow.test.ts (5 tests):** Create COMMITTEE_AMENDED version→AMENDED, reject missing petitionId, reject missing amendedTargets, reject non-existent petition, non-member→403
 
-**Plenary flow (14 tests):**
-- Add APPROVED_BY_COMMITTEE to calendar → ON_CALENDAR
-- Add AMENDED to calendar
-- Add REJECTED_BY_COMMITTEE to calendar (minority report)
-- Reject adding DRAFT to calendar
-- Reject adding SUBMITTED to calendar
-- Reject duplicate petition on same session
-- ADOPT vote → ADOPTED
-- DEFEAT vote → DEFEATED
-- AMEND vote → AMENDED + PLENARY_AMENDED version created
-- TABLE vote → stays ON_CALENDAR
-- REFER_BACK vote → IN_COMMITTEE
-- Reject second final vote on same item
-- Remove item with no actions → reverts status
-- Reject removing item with recorded votes
+**plenary-flow.test.ts (14 tests):** Calendar placement (3 valid statuses + reject DRAFT/SUBMITTED + reject duplicate), all vote types (ADOPT, DEFEAT, AMEND+version, TABLE, REFER_BACK), reject second vote, remove item with/without actions
 
-### 4. Input Validation & Sanitization — 1 file, 17 tests
+**plenary-session-crud.test.ts (13 tests):** Create (STAFF→201, missing fields→400, invalid timeBlock→400, DELEGATE→403), list + filter by conferenceId, detail + 404, update (STAFF→200, DELEGATE→403), delete (ADMIN→200, STAFF→403, DELEGATE→403)
 
-- Missing required petition fields (title, actionType, targetBook, conferenceId) — 4 tests
-- Non-existent conferenceId → 404
-- XSS in title stored safely (no execution)
-- SQL injection in search safely parameterized
-- Committee action missing action/assignmentId → 400
-- Assignment from different committee → 400/404
-- Registration missing name/email/password → 400 (3 tests)
-- Password < 8 characters → 400
-- Duplicate email registration → 409
-- Successful registration returns PUBLIC role
-- Submit petition without targets → 400
+**calendar-item-update.test.ts (5 tests):** Update calendarType→200, update orderNumber, invalid calendarType→400, wrong session→404, DELEGATE→403
+
+**auto-routing.test.ts (5 tests):** Route SUBMITTED→UNDER_REVIEW with assignments, reject non-SUBMITTED→400, reject non-existent→400, DELEGATE→403, idempotent routing (no duplicates)
+
+### 4. Input Validation & Sanitization — 2 files, 24 tests
+
+**input-validation.test.ts (17 tests):** Missing petition fields (title, actionType, targetBook, conferenceId), non-existent conferenceId→404, XSS stored safely, SQL injection parameterized, committee action missing action/assignmentId, assignment from wrong committee, registration (missing name/email/password→400, short password→400, duplicate email→409, success→PUBLIC role), submit without targets→400
+
+**targets-validation.test.ts (7 tests):** Replace targets on DRAFT→200, empty array→400, missing changeType→400, missing paragraphId+resolutionId→400, non-DRAFT→400, non-existent petition→404, non-owner→403
 
 ### 5. Auto-Routing Logic (Unit Tests) — 1 file, 20 tests
 
-Pure function tests (no server needed) for `isInRange()`, `routeParagraph()`, `routeResolution()`, `routeByTags()`.
+Pure function tests for `isInRange()`, `routeParagraph()`, `routeResolution()`, `routeByTags()` with boundary values, multiple ranges, empty inputs.
 
-- `isInRange`: inside range, at boundaries (lower/upper), below, above, multiple ranges, empty ranges
-- `routeParagraph`: single match, boundary overlap (FA + CB), second range match, no match, committee with no ranges
-- `routeResolution`: FA match, CB match, no match
-- `routeByTags`: single tag match, multiple committees, no match, empty array, multiple overlapping tags
+### 6. Search, Filtering, Pagination & APIs — 5 files, 37 tests
 
-### 6. Search, Filtering & Pagination — 1 file, 18 tests
+**search-pagination.test.ts (18 tests):** Auth search by title, status filter, mine=true, DRAFT visibility, special characters; public search excludes DRAFT, pagination metadata, limit clamp, sort by newest/title, status filter, invalid status, page 2 no overlap; admin pipeline + search; results adopted/defeated/summary
 
-- Authenticated: search by title (case-insensitive), filter by status, mine=true, DRAFT visibility, special characters
-- Public: excludes DRAFT, pagination metadata, limit clamped to 100, sort by newest/title, status filter, invalid status handled, page 2 skips page 1
-- Admin pipeline: returns petitions, filters by search
-- Results: adopted filter, defeated filter, summary counts
+**documents.test.ts (8 tests):** List books with counts, paragraphs by book/search/number/sectionId, resolutions by book/search/topicGroup
+
+**public-detail.test.ts (3 tests):** SUBMITTED petition with nested data, DRAFT→404, non-existent→404
+
+**version-diff-api.test.ts (6 tests):** Version diffs with targets, DRAFT→404, non-existent→404, wrong petition→404, compareWith two versions, invalid compareWith→404
+
+**endpoints-misc.test.ts (4 tests):** Health endpoint (ok + counts), dashboard stats (auth→200, unauth→401), conferences list ordered by year
 
 ### 7. Data Integrity & Cascades — 1 file, 8 tests
 
-- Delete DRAFT cascades targets + versions
-- 404 for non-existent petition (GET/PATCH/DELETE), committee, assignment
-- Referential integrity: assignment → petition + committee, version → petition + creator
+Delete DRAFT cascades targets+versions, 404 for non-existent petition/committee/assignment, referential integrity checks
 
 ### 8. Diff Engine (Unit Tests) — 1 file, 19 tests
 
-Pure function tests (no server needed) for `computeDiff()`, `buildVersionDiffs()`, `compareVersionTargets()`.
-
-- `computeDiff`: word-level diff, empty old (all added), empty new (all removed), both empty, identical texts, multi-word additions, complete replacement
-- `buildVersionDiffs`: ADD_PARAGRAPH (all green), DELETE_PARAGRAPH (all red), REPLACE_TEXT (word-level), null proposedText, paragraph/resolution labels, label without title, empty segments for delete with no text
-- `compareVersionTargets`: matching targets (old vs new proposed), new target with no old match, resolution targets, null proposedText in both
+Pure function tests for `computeDiff()`, `buildVersionDiffs()`, `compareVersionTargets()` covering word-level diff, empty inputs, change types, labels, null handling
 
 ---
 
@@ -195,11 +157,11 @@ Pure function tests (no server needed) for `computeDiff()`, `buildVersionDiffs()
 | Suite | Files | Tests | Type |
 |-------|-------|-------|------|
 | Race Conditions | 7 | 8 | Integration |
-| Authorization | 1 | 17 | Integration |
-| Workflow | 3 | 32 | Integration |
-| Validation | 1 | 17 | Integration |
+| Authorization | 2 | 30 | Integration |
+| Workflow | 7 | 72 | Integration |
+| Validation | 2 | 24 | Integration |
 | Routing | 1 | 20 | Unit |
-| Search | 1 | 18 | Integration |
+| Search & APIs | 5 | 37 | Integration |
 | Data Integrity | 1 | 8 | Integration |
 | Diff Engine | 1 | 19 | Unit |
-| **Total** | **16** | **139** | |
+| **Total** | **26** | **208** | |
